@@ -1,5 +1,5 @@
 import { watch, type FSWatcher } from "node:fs"
-import { mkdir, open, readdir, readFile } from "node:fs/promises"
+import { mkdir, open, readdir, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import type { JobLedger, JobRecord } from "./ledger.js"
 
@@ -28,7 +28,10 @@ export function formatEvent(event: JobEvent): string {
 
 export type Deliver = (record: JobRecord, event: JobEvent) => Promise<void>
 
-/** Watches the MCP server's events folder and delivers each completion once to the session that submitted the job. */
+/**
+ * Watches the MCP server's events folder and delivers each completion once to the session that submitted the job,
+ * then removes the delivered event.
+ */
 export class EventWatcher {
   private readonly eventsDir: string
   private readonly inFlight = new Set<string>()
@@ -97,6 +100,7 @@ export class EventWatcher {
         delivered: true,
       })
       await this.deliver(updated ?? record, event)
+      await rm(join(this.eventsDir, jobId + ".json"), { force: true })
     } catch (error) {
       this.onError(error)
     } finally {

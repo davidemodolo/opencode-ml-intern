@@ -34,7 +34,7 @@ Tokens: `HF_TOKEN` or the cached `hf auth login` token; `GITHUB_TOKEN` or the `g
 
 The `local` backend runs each job with `uv run --script` in its own process group, detached from the server, with `CUDA_VISIBLE_DEVICES` set to the single GPU assigned to it. One job runs per GPU (one at a time on machines without a GPU) and the others wait in a queue. A job that declares more `vram_gb` than the largest GPU is rejected at submit time.
 
-Each job lives in `$XDG_DATA_HOME/ml-intern-mcp/jobs/<id>/` (`job.json`, `script.py`, `stdout.log`, `exit_code`), so jobs keep running and are picked up again when the server restarts. When a job ends the server writes `events/<id>.json` with its state, exit code, duration and last log lines; the opencode plugin reads these events to notify the session.
+Each job lives in `$XDG_DATA_HOME/ml-intern-mcp/jobs/<id>/` (`job.json`, `script.py`, `stdout.log`, `exit_code`), so jobs keep running and are picked up again when the server restarts. When a job ends the server writes `events/<id>.json` with its state, exit code, duration and last log lines; the opencode plugin reads these events to notify the session and removes each one once delivered.
 
 Environment variables: `ML_INTERN_DATA_DIR` overrides the data folder, `ML_INTERN_JOB_RUNNER` overrides the job command (default `uv run --script`).
 
