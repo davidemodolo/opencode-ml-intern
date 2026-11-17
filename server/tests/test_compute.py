@@ -1,5 +1,6 @@
 import json
 import sys
+import threading
 import time
 
 import pytest
@@ -96,6 +97,19 @@ def test_cancel_kills_the_script_process(tmp_path):
     while _alive(pid) and time.time() < deadline:
         time.sleep(0.05)
     assert not _alive(pid)
+
+
+def test_services_sharing_a_store_start_a_queued_job_once(tmp_path):
+    services = [make_service(tmp_path) for _ in range(4)]
+    for _ in range(5):
+        job = services[0].store.create(JobSpec(name="once", script="open('runs', 'a').write('x')"))
+        threads = [threading.Thread(target=s.reconcile) for s in services for _ in range(3)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        job = wait_for(services[0], job.id, FINISHED)
+        assert (services[0].store.folder(job.id) / "runs").read_text() == "x"
 
 
 def test_timeout_exit_code_marks_the_job_timed_out(tmp_path):

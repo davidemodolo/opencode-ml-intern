@@ -1,4 +1,7 @@
+import fcntl
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from ml_intern_mcp.compute.local import LocalBackend
 from ml_intern_mcp.compute.models import Hardware, Job, JobSpec, JobState
@@ -18,7 +21,15 @@ class ComputeService:
     def __init__(self, store: JobStore, backends: dict[str, LocalBackend]):
         self.store = store
         self.backends = backends
-        self._lock = threading.RLock()
+        self._thread_lock = threading.Lock()
+        self._lock_path = store.root / "scheduler.lock"
+
+    @contextmanager
+    def _locked(self) -> Iterator[None]:
+        """Serializes scheduling across threads and across servers sharing the data folder."""
+        with self._thread_lock, open(self._lock_path, "a") as lock_file:
+            fcntl.flock(lock_file, fcntl.LOCK_EX)
+            yield
 
     def hardware(self) -> list[Hardware]:
         return [backend.hardware() for backend in self.backends.values()]
@@ -41,7 +52,7 @@ class ComputeService:
                 raise ComputeError(
                     f"the job needs {spec.vram_gb} GB of VRAM but the largest GPU has {largest} GB"
                 )
-        with self._lock:
+        with self._locked():
             job = self.store.create(spec)
             self._schedule()
             return self.store.get(job.id) or job
@@ -53,7 +64,7 @@ class ComputeService:
         return job
 
     def cancel(self, job_id: str) -> Job:
-        with self._lock:
+        with self._locked():
             job = self.get(job_id)
             if job.state.finished:
                 return job
@@ -64,7 +75,7 @@ class ComputeService:
             return job
 
     def reconcile(self) -> None:
-        with self._lock:
+        with self._locked():
             for job in self.store.all():
                 if job.state != JobState.RUNNING:
                     continue
