@@ -19,6 +19,36 @@ opencode plugin add opencode-ml-intern
 
 Requirements: opencode 2.3.0, [uv](https://docs.astral.sh/uv/) and an NVIDIA GPU for training jobs. The plugin registers the MCP server itself. Select the `ml-intern` agent (Tab in the TUI) and describe the training you want.
 
+## For your coding agent
+
+Paste this prompt into your coding agent (opencode, Claude Code, Codex...) to set up ML Intern from this repository:
+
+```text
+Set up opencode-ml-intern (https://github.com/davidemodolo/opencode-ml-intern) on this machine.
+
+1. If the repository is not cloned yet, clone it into a folder of my choice (ask me where).
+   If it is already cloned, use that copy and run `git pull`.
+2. Check the requirements and install what is missing, asking me before installing system packages:
+   - NVIDIA driver (`nvidia-smi` works; skip if the machine has no NVIDIA GPU)
+   - uv (https://docs.astral.sh/uv/)
+   - Node.js 26 (the repository has a .nvmrc; with nvm: `nvm install` in the repository root)
+   - opencode 2.3.0 (`npm install -g @opencode/cli@2.3.0`)
+3. In the repository root:
+   - `cd server && uv sync && uv run pytest`
+   - `cd plugin && npm ci && npm run build && npm test`
+4. Add the plugin to my global opencode config (`~/.config/opencode/opencode.jsonc`, or under
+   $XDG_CONFIG_HOME). Merge it with the existing content and keep my other settings. Use absolute
+   paths to the cloned repository:
+   "plugins": [{
+     "package": "<repo>/plugin",
+     "options": { "serverCommand": ["uv", "run", "--project", "<repo>/server", "ml-intern-mcp"] }
+   }]
+5. Run `opencode reload`, then check that `opencode debug agents --standalone` lists the
+   `ml-intern` and `ml-research` agents.
+6. Tell me what you installed and changed, and how to start: open opencode in a project and pick
+   the ml-intern agent with Tab. A first test prompt: "List the available hardware".
+```
+
 ## Hardware
 
 Each job runs on a single GPU. On a machine with several GPUs, jobs run in parallel, one per GPU, and the rest wait in a queue; a job fits when its model and training state fit in the VRAM of one GPU. The per-session limits (`maxActiveJobs`, default 4, and `maxGpuHours`, default 24) are plugin options, see [`plugin/README.md`](plugin/README.md).
