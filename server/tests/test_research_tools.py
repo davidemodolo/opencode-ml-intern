@@ -171,3 +171,16 @@ def test_find_hf_api_curl_examples_run_in_a_shell():
 async def test_hf_papers_accepts_a_null_limit():
     text, ok = await papers_tool.hf_papers_handler({"operation": "paper_details", "limit": None})
     assert not ok and "arxiv_id" in text
+
+
+async def test_semantic_scholar_rate_limit_waits_seconds_not_minutes(monkeypatch):
+    sleeps = []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(papers_tool.asyncio, "sleep", fake_sleep)
+    transport = httpx.MockTransport(lambda request: httpx.Response(429))
+    async with httpx.AsyncClient(transport=transport) as client:
+        response = await papers_tool._s2_request(client, "GET", "/graph/v1/paper/x")
+    assert response is None and sum(sleeps) <= 10
