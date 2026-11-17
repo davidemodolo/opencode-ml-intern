@@ -8,6 +8,7 @@ import asyncio
 from typing import Any, Dict, Optional
 
 from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub.hf_api import RepoFile
 from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
 
 from ml_intern_mcp.tools.types import ToolResult, error_result, handler_output
@@ -118,8 +119,10 @@ class HfRepoFilesTool:
 
         lines = []
         total_size = 0
+        file_count = 0
         for item in sorted(items, key=lambda x: x.path):
-            if hasattr(item, "size") and item.size:
+            if isinstance(item, RepoFile):
+                file_count += 1
                 total_size += item.size
                 lines.append(f"{item.path} ({_format_size(item.size)})")
             else:
@@ -127,7 +130,7 @@ class HfRepoFilesTool:
 
         url = _build_repo_url(repo_id, repo_type)
         response = (
-            f"**{repo_id}** ({len(items)} files, {_format_size(total_size)})\n{url}/tree/{revision}\n\n"
+            f"**{repo_id}** ({file_count} files, {_format_size(total_size)})\n{url}/tree/{revision}\n\n"
             + "\n".join(lines)
         )
 

@@ -5,6 +5,7 @@ import time
 import httpx
 import pytest
 import requests
+from huggingface_hub.hf_api import RepoFile, RepoFolder
 
 from ml_intern_mcp.research import HubSession
 from ml_intern_mcp.tools import dataset_tools, docs_tools, github_list_repos, papers_tool
@@ -184,3 +185,27 @@ async def test_semantic_scholar_rate_limit_waits_seconds_not_minutes(monkeypatch
     async with httpx.AsyncClient(transport=transport) as client:
         response = await papers_tool._s2_request(client, "GET", "/graph/v1/paper/x")
     assert response is None and sum(sleeps) <= 10
+
+
+class FakeHubApi:
+    token = None
+
+    def __init__(self, items=()):
+        self.items = list(items)
+
+    def list_repo_tree(self, **kwargs):
+        yield from self.items
+
+    def get_paths_info(self, **kwargs):
+        return self.items
+
+
+async def test_hf_repo_listing_shows_empty_files_as_files():
+    tool = HfRepoFilesTool()
+    tool.api = FakeHubApi(
+        [RepoFolder(path="pkg", oid="t"), RepoFile(path="pkg/__init__.py", size=0, oid="b")]
+    )
+    result = await tool.execute({"operation": "list", "repo_id": "r"})
+    lines = result["formatted"].splitlines()
+    assert "pkg/__init__.py (0.0B)" in lines and "pkg/" in lines
+    assert "(1 files," in lines[0]
