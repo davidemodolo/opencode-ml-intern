@@ -65,10 +65,7 @@ def register_compute_tools(server: MCPServer, service: ComputeService) -> None:
             raise ToolError(str(error)) from error
 
     @server.tool(
-        description=(
-            "List the compute backends with their GPUs (name, total and free VRAM in GB) "
-            "and hourly cost in USD."
-        )
+        description=("List the compute backends with their GPUs (name, total and free VRAM in GB).")
     )
     def list_hardware() -> dict[str, Any]:
         return {"backends": [asdict(h) for h in service.hardware()]}
