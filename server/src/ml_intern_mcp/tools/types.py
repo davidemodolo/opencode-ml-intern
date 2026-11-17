@@ -14,3 +14,11 @@ class ToolResult(TypedDict, total=False):
     totalResults: int
     resultsShared: int
     isError: bool
+
+
+def error_result(message: str) -> ToolResult:
+    return {"formatted": message, "totalResults": 0, "resultsShared": 0, "isError": True}
+
+
+def handler_output(result: ToolResult) -> tuple[str, bool]:
+    return result["formatted"], not result.get("isError", False)

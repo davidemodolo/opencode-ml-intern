@@ -15,7 +15,7 @@ from typing import Any
 import httpx
 from bs4 import BeautifulSoup, Tag
 
-from ml_intern_mcp.tools.types import ToolResult
+from ml_intern_mcp.tools.types import ToolResult, error_result, handler_output
 
 HF_API = "https://huggingface.co/api"
 ARXIV_HTML = "https://arxiv.org/html"
@@ -493,15 +493,6 @@ def _format_collections_compact(collections: list) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _error(message: str) -> ToolResult:
-    return {
-        "formatted": message,
-        "totalResults": 0,
-        "resultsShared": 0,
-        "isError": True,
-    }
-
-
 def _validate_arxiv_id(args: dict) -> str | None:
     """Return arxiv_id or None if missing."""
     return args.get("arxiv_id")
@@ -643,7 +634,7 @@ async def _s2_bulk_search(
 async def _op_search(args: dict[str, Any], limit: int) -> ToolResult:
     query = args.get("query")
     if not query:
-        return _error("'query' is required for search operation.")
+        return error_result("'query' is required for search operation.")
 
     # Route to S2 when filters are present
     use_s2 = any(
@@ -681,7 +672,7 @@ async def _op_search(args: dict[str, Any], limit: int) -> ToolResult:
 async def _op_paper_details(args: dict[str, Any], limit: int) -> ToolResult:
     arxiv_id = _validate_arxiv_id(args)
     if not arxiv_id:
-        return _error("'arxiv_id' is required for paper_details.")
+        return error_result("'arxiv_id' is required for paper_details.")
 
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(f"{HF_API}/papers/{arxiv_id}")
@@ -698,7 +689,7 @@ async def _op_paper_details(args: dict[str, Any], limit: int) -> ToolResult:
 async def _op_read_paper(args: dict[str, Any], limit: int) -> ToolResult:
     arxiv_id = _validate_arxiv_id(args)
     if not arxiv_id:
-        return _error("'arxiv_id' is required for read_paper.")
+        return error_result("'arxiv_id' is required for read_paper.")
 
     section_query = args.get("section")
 
@@ -731,7 +722,7 @@ async def _op_read_paper(args: dict[str, Any], limit: int) -> ToolResult:
             msg += f"PDF: https://arxiv.org/pdf/{arxiv_id}"
             return {"formatted": msg, "totalResults": 1, "resultsShared": 1}
         except Exception:
-            return _error(
+            return error_result(
                 f"Could not fetch paper {arxiv_id}. Check the arxiv ID is correct."
             )
 
@@ -747,7 +738,7 @@ async def _op_read_paper(args: dict[str, Any], limit: int) -> ToolResult:
     section = _find_section(parsed["sections"], section_query)
     if not section:
         available = "\n".join(f"- {s['title']}" for s in parsed["sections"])
-        return _error(
+        return error_result(
             f"Section '{section_query}' not found. Available sections:\n{available}"
         )
 
@@ -821,7 +812,7 @@ def _format_citation_graph(
 async def _op_citation_graph(args: dict[str, Any], limit: int) -> ToolResult:
     arxiv_id = _validate_arxiv_id(args)
     if not arxiv_id:
-        return _error("'arxiv_id' is required for citation_graph.")
+        return error_result("'arxiv_id' is required for citation_graph.")
 
     direction = args.get("direction", "both")
     s2_id = _s2_paper_id(arxiv_id)
@@ -853,7 +844,7 @@ async def _op_citation_graph(args: dict[str, Any], limit: int) -> ToolResult:
                 cites = r.get("data", [])
 
     if refs is None and cites is None:
-        return _error(
+        return error_result(
             f"Could not fetch citation data for {arxiv_id}. Paper may not be indexed by Semantic Scholar."
         )
 
@@ -868,7 +859,7 @@ async def _op_citation_graph(args: dict[str, Any], limit: int) -> ToolResult:
 async def _op_find_datasets(args: dict[str, Any], limit: int) -> ToolResult:
     arxiv_id = _validate_arxiv_id(args)
     if not arxiv_id:
-        return _error("'arxiv_id' is required for find_datasets.")
+        return error_result("'arxiv_id' is required for find_datasets.")
 
     sort = args.get("sort", "downloads")
     sort_key = SORT_MAP.get(sort, "downloads")
@@ -903,7 +894,7 @@ async def _op_find_datasets(args: dict[str, Any], limit: int) -> ToolResult:
 async def _op_find_models(args: dict[str, Any], limit: int) -> ToolResult:
     arxiv_id = _validate_arxiv_id(args)
     if not arxiv_id:
-        return _error("'arxiv_id' is required for find_models.")
+        return error_result("'arxiv_id' is required for find_models.")
 
     sort = args.get("sort", "downloads")
     sort_key = SORT_MAP.get(sort, "downloads")
@@ -938,7 +929,7 @@ async def _op_find_models(args: dict[str, Any], limit: int) -> ToolResult:
 async def _op_find_collections(args: dict[str, Any], limit: int) -> ToolResult:
     arxiv_id = _validate_arxiv_id(args)
     if not arxiv_id:
-        return _error("'arxiv_id' is required for find_collections.")
+        return error_result("'arxiv_id' is required for find_collections.")
 
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(f"{HF_API}/collections", params={"paper": arxiv_id})
@@ -963,7 +954,7 @@ async def _op_find_collections(args: dict[str, Any], limit: int) -> ToolResult:
 async def _op_find_all_resources(args: dict[str, Any], limit: int) -> ToolResult:
     arxiv_id = _validate_arxiv_id(args)
     if not arxiv_id:
-        return _error("'arxiv_id' is required for find_all_resources.")
+        return error_result("'arxiv_id' is required for find_all_resources.")
 
     per_cat = min(limit, 10)
 
@@ -1062,7 +1053,7 @@ def _format_snippets(snippets: list[dict], query: str) -> str:
 async def _op_snippet_search(args: dict[str, Any], limit: int) -> ToolResult:
     query = args.get("query")
     if not query:
-        return _error("'query' is required for snippet_search.")
+        return error_result("'query' is required for snippet_search.")
 
     params: dict[str, Any] = {
         "query": query,
@@ -1085,7 +1076,7 @@ async def _op_snippet_search(args: dict[str, Any], limit: int) -> ToolResult:
             client, "GET", "/graph/v1/snippet/search", params=params
         )
         if not resp or resp.status_code != 200:
-            return _error("Snippet search failed. Semantic Scholar may be unavailable.")
+            return error_result("Snippet search failed. Semantic Scholar may be unavailable.")
         data = resp.json()
 
     snippets = data.get("data") or []
@@ -1113,7 +1104,7 @@ async def _op_recommend(args: dict[str, Any], limit: int) -> ToolResult:
     arxiv_id = _validate_arxiv_id(args)
 
     if not arxiv_id and not positive_ids:
-        return _error("'arxiv_id' or 'positive_ids' is required for recommend.")
+        return error_result("'arxiv_id' or 'positive_ids' is required for recommend.")
 
     fields = "title,externalIds,year,citationCount,tldr,venue"
 
@@ -1139,7 +1130,7 @@ async def _op_recommend(args: dict[str, Any], limit: int) -> ToolResult:
                 params={"fields": fields, "limit": limit},
             )
             if not resp or resp.status_code != 200:
-                return _error(
+                return error_result(
                     "Recommendation request failed. Semantic Scholar may be unavailable."
                 )
             data = resp.json()
@@ -1151,7 +1142,7 @@ async def _op_recommend(args: dict[str, Any], limit: int) -> ToolResult:
                 {"fields": fields, "limit": limit, "from": "recent"},
             )
             if not data:
-                return _error(
+                return error_result(
                     "Recommendation request failed. Semantic Scholar may be unavailable."
                 )
 
@@ -1318,7 +1309,7 @@ async def hf_papers_handler(arguments: dict[str, Any]) -> tuple[str, bool]:
 
     try:
         result = await handler(arguments, limit)
-        return result["formatted"], not result.get("isError", False)
+        return handler_output(result)
     except httpx.HTTPStatusError as e:
         return f"API error: {e.response.status_code} — {e.response.text[:200]}", False
     except httpx.RequestError as e:
