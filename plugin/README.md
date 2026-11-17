@@ -19,6 +19,7 @@ The plugin registers the `ml-intern` MCP server (`uvx ml-intern-mcp==0.1.0`) unl
 - Command `/jobs`: lists the jobs of the session.
 - Skills: `ml-job-script`, `lora-sft`, `qlora`, `preference-tuning`.
 - Compute gate: `submit_job` asks for approval and each session has a limit of active jobs and GPU hours.
+- Hub writes: `hf_repo_write` (uploads and deletes in Hugging Face repos) asks for approval on every call.
 - Job notifications: when a job ends, the session that submitted it receives its state and last log lines and resumes.
 - Repetition guard: repeated identical tool calls and repeating call cycles are blocked, and the agent receives a corrective message. Polling `job_status` on a running job is blocked after `loopThreshold` calls, since completion is notified.
 
