@@ -4,6 +4,7 @@ GitHub Read File Tool - Read file contents from any GitHub repository with line 
 Fetch exact file contents with metadata, supporting line ranges for efficient reading.
 """
 
+import asyncio
 import base64
 import json
 from typing import Any, Dict, Optional
@@ -240,7 +241,8 @@ GITHUB_READ_FILE_TOOL_SPEC = {
 async def github_read_file_handler(arguments: Dict[str, Any]) -> tuple[str, bool]:
     """Handler for agent tool router"""
     try:
-        result = read_file(
+        result = await asyncio.to_thread(
+            read_file,
             repo=arguments["repo"],
             path=arguments["path"],
             ref=arguments.get("ref", "HEAD"),
