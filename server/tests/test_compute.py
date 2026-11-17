@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import threading
 import time
@@ -122,6 +123,28 @@ def test_timeout_exit_code_marks_the_job_timed_out(tmp_path):
     store.exit_code_path(job.id).write_text("124")
     backend.refresh(job)
     assert job.state == JobState.TIMED_OUT and job.exit_code == 124
+
+
+def test_sigkill_before_the_timeout_is_a_failure_not_a_timeout(tmp_path):
+    service = make_service(tmp_path)
+    script = "import os, signal; os.kill(os.getpid(), signal.SIGKILL)"
+    job = service.submit(JobSpec(name="oom", script=script))
+    job = wait_for(service, job.id, FINISHED)
+    assert job.state == JobState.FAILED and job.exit_code == 137
+    assert "SIGKILL" in job.error
+
+
+def test_sigkill_noticed_after_a_restart_uses_the_exit_time(tmp_path):
+    store = JobStore(tmp_path)
+    backend = LocalBackend(store, [sys.executable], gpu_probe=lambda: list(ONE_GPU))
+    job = store.create(JobSpec(name="oom", script="print(1)", timeout_minutes=60))
+    job.state = JobState.RUNNING
+    job.started_at = time.time() - 2 * 3600
+    exit_code = store.exit_code_path(job.id)
+    exit_code.write_text("137")
+    os.utime(exit_code, (job.started_at + 600, job.started_at + 600))
+    backend.refresh(job)
+    assert job.state == JobState.FAILED and job.duration_seconds == 600
 
 
 def test_vram_larger_than_any_gpu_fails_fast(tmp_path):
