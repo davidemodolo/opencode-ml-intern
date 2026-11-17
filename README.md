@@ -116,7 +116,7 @@ cd plugin && npm install && npm run build && npm test
 node e2e/run.mjs --fresh   # end-to-end acceptance run on the local GPU
 ```
 
-`node e2e/run.mjs` starts an isolated `opencode serve`, asks for a 10-step LoRA fine-tune and exits with 0 once an adapter is saved. `spikes/` holds the probes used to verify opencode behavior (results in `docs/spikes.md`). The roadmap is in `docs/plan-phase-1.md` (local GPU) and `docs/plan-phase-2.md` (cloud GPU providers and HF Jobs).
+`node e2e/run.mjs` starts an isolated `opencode serve`, asks for a 10-step LoRA fine-tune and exits with 0 once an adapter is saved. `spikes/` holds the probes used to verify opencode behavior (results in `docs/spikes.md`). The roadmap is in `docs/plan-phase-1.md` (local GPU) and `docs/plan-phase-2.md` (cloud GPU providers and HF Jobs); open work is tracked in [`TODO.md`](TODO.md).
 
 ## License
 
