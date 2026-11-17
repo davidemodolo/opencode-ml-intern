@@ -3,6 +3,8 @@ import json
 import time
 from pathlib import Path
 
+from ml_intern_mcp.files import write_atomic
+
 
 class ResultCache:
     """On-disk cache of successful tool results, keyed by tool name and arguments."""
@@ -20,15 +22,17 @@ class ResultCache:
         if not self.enabled:
             return None
         path = self._path(tool, arguments)
-        if not path.exists() or time.time() - path.stat().st_mtime > self.ttl:
+        try:
+            if time.time() - path.stat().st_mtime > self.ttl:
+                path.unlink(missing_ok=True)
+                return None
+            return json.loads(path.read_text())["text"]
+        except FileNotFoundError:
             return None
-        return json.loads(path.read_text())["text"]
 
     def put(self, tool: str, arguments: dict, text: str) -> None:
         if not self.enabled:
             return
         path = self._path(tool, arguments)
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"text": text}))
-        tmp.replace(path)
+        write_atomic(path, json.dumps({"text": text}))

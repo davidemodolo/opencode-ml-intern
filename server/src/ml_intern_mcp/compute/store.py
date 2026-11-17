@@ -1,11 +1,10 @@
 import json
-import os
-import threading
 import time
 import uuid
 from pathlib import Path
 
 from ml_intern_mcp.compute.models import Job, JobSpec, JobState
+from ml_intern_mcp.files import write_atomic
 
 
 class JobStore:
@@ -37,7 +36,7 @@ class JobStore:
         return self.folder(job_id) / "exit_code"
 
     def save(self, job: Job) -> None:
-        _write_atomic(self.folder(job.id) / "job.json", json.dumps(job.to_dict(), indent=2))
+        write_atomic(self.folder(job.id) / "job.json", json.dumps(job.to_dict(), indent=2))
 
     def get(self, job_id: str) -> Job | None:
         path = self.folder(job_id) / "job.json"
@@ -74,10 +73,4 @@ class JobStore:
             "workdir": str(self.folder(job.id)),
             "log_tail": self.log_lines(job.id)[-tail:],
         }
-        _write_atomic(self.events_dir / f"{job.id}.json", json.dumps(event, indent=2))
-
-
-def _write_atomic(path: Path, text: str) -> None:
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-    tmp.write_text(text)
-    os.replace(tmp, path)
+        write_atomic(self.events_dir / f"{job.id}.json", json.dumps(event, indent=2))
