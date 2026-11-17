@@ -60,39 +60,30 @@ async def inspect_dataset(
             return_exceptions=True,
         )
 
-        # Process is-valid
-        if not isinstance(results[0], Exception):
-            try:
-                output_parts.append(_format_status(results[0].json()))
-            except Exception as e:
-                errors.append(f"is-valid: {e}")
+        status_data = _payload(results[0], "is-valid", errors)
+        if status_data is not None:
+            _add_section(output_parts, errors, "is-valid", _format_status, status_data)
 
         # Process splits and auto-detect config/split
-        configs = []
-        if not isinstance(results[1], Exception):
-            try:
-                splits_data = results[1].json()
-                configs = _extract_configs(splits_data)
-                if not config:
-                    config = configs[0]["name"] if configs else "default"
-                if not split:
-                    split = configs[0]["splits"][0] if configs else "train"
-                output_parts.append(_format_structure(configs))
-            except Exception as e:
-                errors.append(f"splits: {e}")
+        splits_data = _payload(results[1], "splits", errors)
+        if splits_data is not None:
+            configs = _extract_configs(splits_data)
+            if not config:
+                config = configs[0]["name"] if configs else "default"
+            if not split:
+                split = configs[0]["splits"][0] if configs else "train"
+            _add_section(output_parts, errors, "splits", _format_structure, configs)
 
         if not config:
             config = "default"
         if not split:
             split = "train"
 
-        # Process parquet (will be added at the end)
-        parquet_section = None
-        if not isinstance(results[2], Exception):
-            try:
-                parquet_section = _format_parquet_files(results[2].json())
-            except Exception:
-                pass  # Silently skip if no parquet
+        # Datasets without parquet export are common, so its errors are not reported
+        parquet_data = _payload(results[2], "parquet", [])
+        parquet_sections: list[str] = []
+        if parquet_data:
+            _add_section(parquet_sections, [], "parquet", _format_parquet_files, parquet_data)
 
         # Phase 2: Parallel calls for content (depend on config/split)
         info_task = client.get(
@@ -110,27 +101,17 @@ async def inspect_dataset(
             return_exceptions=True,
         )
 
-        # Process info (schema)
-        if not isinstance(content_results[0], Exception):
-            try:
-                output_parts.append(_format_schema(content_results[0].json(), config))
-            except Exception as e:
-                errors.append(f"info: {e}")
+        info_data = _payload(content_results[0], "info", errors)
+        if info_data is not None:
+            _add_section(output_parts, errors, "info", _format_schema, info_data, config)
 
-        # Process sample rows
-        if not isinstance(content_results[1], Exception):
-            try:
-                output_parts.append(
-                    _format_samples(
-                        content_results[1].json(), config, split, sample_rows
-                    )
-                )
-            except Exception as e:
-                errors.append(f"rows: {e}")
+        rows_data = _payload(content_results[1], "rows", errors)
+        if rows_data is not None:
+            _add_section(
+                output_parts, errors, "rows", _format_samples, rows_data, config, split, sample_rows
+            )
 
-        # Add parquet section at the end if available
-        if parquet_section:
-            output_parts.append(parquet_section)
+        output_parts.extend(section for section in parquet_sections if section)
 
     # Combine output
     formatted = f"# {dataset}\n\n" + "\n\n".join(output_parts)
@@ -143,6 +124,29 @@ async def inspect_dataset(
         "resultsShared": 1,
         "isError": len(output_parts) == 0,
     }
+
+
+def _payload(response: Any, endpoint: str, errors: list[str]) -> dict | None:
+    """Return the JSON body of a successful response, or record why there is none."""
+    if isinstance(response, Exception):
+        errors.append(f"{endpoint}: {response}")
+        return None
+    try:
+        data = response.json()
+    except ValueError:
+        data = None
+    if response.status_code >= 400 or not isinstance(data, dict):
+        detail = data.get("error", "") if isinstance(data, dict) else response.text[:200]
+        errors.append(f"{endpoint}: HTTP {response.status_code} {detail}".rstrip())
+        return None
+    return data
+
+
+def _add_section(parts: list, errors: list[str], endpoint: str, format_fn, *args) -> None:
+    try:
+        parts.append(format_fn(*args))
+    except Exception as e:
+        errors.append(f"{endpoint}: {e}")
 
 
 def _format_status(data: dict) -> str:
