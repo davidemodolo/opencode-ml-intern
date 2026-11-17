@@ -4,7 +4,7 @@ description: Template and rules for scripts submitted with submit_job (PEP 723 d
 ---
 # Job scripts for submit_job
 
-submit_job runs the script with `uv run --script` in its own job directory. The script must be self-contained.
+submit_job runs the script with `uv run --script` in its own job directory. The script must be self-contained. Pass its source or the absolute path of the `.py` file you wrote: the file is copied at submit time.
 
 ## Template
 

@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
@@ -12,6 +13,18 @@ RUNNING_NOTE = (
     "The job is still running. Its completion is notified to the session automatically: "
     "do not poll, continue with other work or end your turn."
 )
+
+
+def _script_source(script: str) -> str:
+    candidate = script.strip()
+    if "\n" in candidate or not candidate.endswith(".py"):
+        return script
+    path = Path(candidate)
+    if not path.is_absolute():
+        raise ComputeError(f"script path {candidate} must be absolute")
+    if not path.is_file():
+        raise ComputeError(f"script file {candidate} does not exist")
+    return path.read_text()
 
 
 def _job_view(service: ComputeService, job: Job, tail: int = STATUS_TAIL_LINES) -> dict[str, Any]:
@@ -55,8 +68,10 @@ def register_compute_tools(server: MCPServer, service: ComputeService) -> None:
 
     @server.tool(
         description=(
-            "Submit a Python training or evaluation script as a background job. The script runs "
-            "with 'uv run --script', so declare its dependencies inline with a PEP 723 block "
+            "Submit a Python training or evaluation script as a background job. 'script' is the "
+            "script source or the absolute path of an existing .py file, which is copied at submit "
+            "time. The script runs with 'uv run --script', so declare its dependencies inline with "
+            "a PEP 723 block "
             "('# /// script' ... 'dependencies = [...]' ... '# ///'). Jobs run one per GPU; "
             "extra jobs are queued. Set vram_gb to the VRAM the job needs to fail fast when no "
             "GPU can fit it. Completion is notified to the session automatically."
@@ -73,7 +88,7 @@ def register_compute_tools(server: MCPServer, service: ComputeService) -> None:
     ) -> dict[str, Any]:
         spec = JobSpec(
             name=name,
-            script=script,
+            script=call(_script_source, script),
             backend=backend,
             gpu=gpu,
             vram_gb=vram_gb,

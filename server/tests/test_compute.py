@@ -146,6 +146,19 @@ def test_cpu_only_machine_runs_one_job_at_a_time(tmp_path):
     wait_for(service, second.id, FINISHED)
 
 
+async def test_submit_job_reads_a_script_path(tmp_path):
+    service = make_service(tmp_path / "data")
+    script = tmp_path / "train.py"
+    script.write_text("print('from file')")
+    async with Client(build_server([], service)) as client:
+        submitted = await client.call_tool("submit_job", {"name": "file", "script": f" {script}\n"})
+        job = wait_for(service, submitted.structured_content["job_id"], FINISHED)
+        assert service.store.log_lines(job.id) == ["from file"]
+        for bad in ["train.py", str(tmp_path / "missing.py")]:
+            result = await client.call_tool("submit_job", {"name": "bad", "script": bad})
+            assert result.is_error
+
+
 async def test_compute_tools_over_mcp(tmp_path):
     service = make_service(tmp_path)
     async with Client(build_server([], service)) as client:

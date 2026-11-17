@@ -25,7 +25,7 @@ Tokens: `HF_TOKEN` or the cached `hf auth login` token; `GITHUB_TOKEN` or the `g
 | Tool | What it does |
 |---|---|
 | `list_hardware` | Backends with their GPUs (total and free VRAM) and hourly cost |
-| `submit_job` | Runs a Python script with inline PEP 723 dependencies as a background job |
+| `submit_job` | Runs a Python script with inline PEP 723 dependencies as a background job; takes the script source or the absolute path of a `.py` file |
 | `job_status` | State, exit code, duration and last log lines |
 | `job_logs` | The last lines of the log, or a window from an offset |
 | `cancel_job` | Stops a queued or running job |
