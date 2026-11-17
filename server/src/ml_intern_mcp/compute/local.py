@@ -9,7 +9,8 @@ from pathlib import Path
 from ml_intern_mcp.compute.models import Gpu, Hardware, Job, JobState
 from ml_intern_mcp.compute.store import JobStore
 
-TIMEOUT_EXIT_CODES = {124, 137}
+TIMEOUT_EXIT_CODE = 124
+SIGKILL_EXIT_CODE = 137
 KILL_GRACE_SECONDS = 30
 BYTES_PER_GB = 1024**3
 
@@ -110,7 +111,7 @@ class LocalBackend:
             process.poll()
         exit_code = self.store.read_exit_code(job.id)
         if exit_code is not None:
-            self._finish(job, exit_code)
+            self._finish(job, exit_code, self.store.exit_code_path(job.id).stat().st_mtime)
             return
         if job.pid is not None and not _alive(job.pid):
             job.state = JobState.FAILED
@@ -130,13 +131,20 @@ class LocalBackend:
         job.finished_at = time.time()
         self._processes.pop(job.id, None)
 
-    def _finish(self, job: Job, exit_code: int) -> None:
+    def _finish(self, job: Job, exit_code: int, finished_at: float) -> None:
         job.exit_code = exit_code
-        job.finished_at = time.time()
+        job.finished_at = finished_at
         if exit_code == 0:
             job.state = JobState.SUCCEEDED
-        elif exit_code in TIMEOUT_EXIT_CODES:
+        elif exit_code == TIMEOUT_EXIT_CODE or (
+            exit_code == SIGKILL_EXIT_CODE
+            and (job.duration_seconds or 0) >= job.spec.timeout_minutes * 60
+        ):
             job.state = JobState.TIMED_OUT
         else:
             job.state = JobState.FAILED
+            if exit_code == SIGKILL_EXIT_CODE:
+                job.error = (
+                    "the script was killed by SIGKILL, most likely for running out of memory"
+                )
         self._processes.pop(job.id, None)
