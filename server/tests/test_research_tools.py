@@ -1,10 +1,11 @@
 import asyncio
 import time
 
+import httpx
 import pytest
 import requests
 
-from ml_intern_mcp.tools import github_list_repos
+from ml_intern_mcp.tools import dataset_tools, github_list_repos
 from ml_intern_mcp.tools.github_find_examples import github_find_examples_handler
 from ml_intern_mcp.tools.github_read_file import github_read_file_handler, read_file
 from ml_intern_mcp.tools.hf_repo_files_tool import HfRepoFilesTool
@@ -93,3 +94,26 @@ def test_read_file_escapes_the_path(monkeypatch, github_token):
     monkeypatch.setattr(requests, "get", fake_get)
     read_file("o/r", "notebooks/Fine-tune #2?.ipynb")
     assert urls == ["https://api.github.com/repos/o/r/contents/notebooks/Fine-tune%20%232%3F.ipynb"]
+
+
+def mock_datasets_server(monkeypatch, respond):
+    requested = []
+
+    def handler(request):
+        requested.append((request.url.path, dict(request.url.params)))
+        status, payload = respond(request.url.path)
+        return httpx.Response(status, json=payload)
+
+    real_client = httpx.AsyncClient
+
+    def client(**kwargs):
+        return real_client(transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(dataset_tools.httpx, "AsyncClient", client)
+    return requested
+
+
+async def test_inspect_dataset_reports_server_errors(monkeypatch):
+    mock_datasets_server(monkeypatch, lambda path: (404, {"error": "The dataset does not exist."}))
+    text, ok = await dataset_tools.hf_inspect_dataset_handler({"dataset": "o/missing"})
+    assert not ok and "The dataset does not exist." in text
