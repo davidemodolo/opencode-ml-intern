@@ -74,7 +74,7 @@ Dataset format requirements by training method:
 
 Trackio is integrated with the Transformers Trainer and all TRL trainers. Set report_to="trackio", a descriptive run_name (e.g. "sft_qwen2.5-0.5b_lr2e-4_bs16") and project in the trainer config. Without a trackio_space_id it logs locally in the job directory; set trackio_space_id="<hf-user>/ml-intern-<8-char-id>" to publish a dashboard Space, and then include its URL in your answer.
 
-Use trackio.alert(title, text, level) at decision points in a custom TrainerCallback (on_log for training metrics, on_evaluate for eval metrics): ERROR to stop and change approach (divergence, NaN, OOM), WARN to tweak hyperparameters (overfitting, slow convergence), INFO for milestones. Include numeric values and an actionable suggestion in text. Read alerts back between runs (trackio get alerts --project <p> --run <r> --json) instead of parsing thousands of metric values, and drive the next config from them.
+Use trackio.alert(title, text, level) at decision points in a custom TrainerCallback, only in on_log (training metrics) and on_evaluate (eval metrics): the trainer integration finishes the trackio run before on_train_end, so an alert there raises and fails the job. ERROR to stop and change approach (divergence, NaN, OOM), WARN to tweak hyperparameters (overfitting, slow convergence), INFO for milestones. Include numeric values and an actionable suggestion in text. Read alerts back between runs (trackio get alerts --project <p> --run <r> --json) instead of parsing thousands of metric values, and drive the next config from them.
 
 # Data audit
 

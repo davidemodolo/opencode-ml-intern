@@ -79,4 +79,5 @@ if HUB_MODEL_ID:
 - Dataset formats accepted by SFTTrainer: "messages" (conversational), "text", or "prompt"/"completion". Check with hf_inspect_dataset.
 - Memory: LoRA on a model of N billion parameters in bf16 needs about 2N GB for the weights plus activations. With 8 GB, models up to about 1.5B fit with batch size 1-2, gradient accumulation and activation checkpointing; use QLoRA (skill qlora) for larger models.
 - On OOM keep the effective batch size: halve per_device_train_batch_size and double gradient_accumulation_steps.
+- With report_to="trackio", call trackio.alert only from on_log or on_evaluate callbacks: the trainer finishes the trackio run before on_train_end, and an alert there raises.
 - Load the adapter for inference with `peft.AutoPeftModelForCausalLM.from_pretrained("outputs/adapter")`.
