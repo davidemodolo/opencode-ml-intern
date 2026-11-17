@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { configureAgents, ML_INTERN_AGENT, ML_RESEARCH_AGENT } from "../src/agents.js"
+import { ML_RESEARCH_PROMPT } from "../src/prompts.js"
 import { jobIdFrom } from "../src/results.js"
 import { registerServer } from "../src/mcp.js"
 import { DEFAULT_SERVER_COMMAND, resolveOptions } from "../src/options.js"
@@ -29,6 +30,7 @@ describe("agents", () => {
     expect(research.permissions).toContainEqual({ action: "ml-intern_hf_papers", resource: "*", effect: "allow" })
     expect(research.permissions.some((p: any) => p.action.endsWith("submit_job"))).toBe(false)
     expect(research.permissions.some((p: any) => p.action.endsWith("hf_repo_write"))).toBe(false)
+    expect(ML_RESEARCH_PROMPT).not.toContain("hf_repo_write")
     const approved = resolveOptions({ autoApprove: true }, {})
     configureAgents({ update: (id, fn) => fn((agents[id] = { permissions: [] })) }, approved)
     expect(agents[ML_INTERN_AGENT].permissions).toContainEqual({ action: "ml-intern_hf_repo_write", resource: "*", effect: "ask" })
