@@ -7,11 +7,14 @@ Operations: list, read, upload, delete
 import asyncio
 from typing import Any, Dict, Optional
 
-from huggingface_hub import HfApi, hf_hub_download
+import httpx
+from huggingface_hub import HfApi, hf_hub_url
 from huggingface_hub.hf_api import RepoFile
 from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
 
 from ml_intern_mcp.tools.types import ToolResult, error_result, handler_output
+
+MAX_UTF8_BYTES = 4
 
 
 async def _async_call(func, *args, **kwargs):
@@ -154,37 +157,33 @@ class HfRepoFilesTool:
         revision = args.get("revision", "main")
         max_chars = args.get("max_chars", 50000)
 
-        file_path = await _async_call(
-            hf_hub_download,
-            repo_id=repo_id,
-            filename=path,
-            repo_type=repo_type,
-            revision=revision,
-            token=self.api.token,
-        )
+        url = hf_hub_url(repo_id, path, repo_type=repo_type, revision=revision)
+        headers = {"Range": f"bytes=0-{max_chars * MAX_UTF8_BYTES - 1}"}
+        if self.api.token:
+            headers["Authorization"] = f"Bearer {self.api.token}"
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            response = await client.get(url, headers=headers)
+        if response.status_code == 404:
+            return error_result(f"File not found: {path}")
+        response.raise_for_status()
 
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            truncated = len(content) > max_chars
-            if truncated:
-                content = content[:max_chars]
-
-            url = f"{_build_repo_url(repo_id, repo_type)}/blob/{revision}/{path}"
-            response = f"**{path}**{' (truncated)' if truncated else ''}\n{url}\n\n```\n{content}\n```"
-
-            return {"formatted": response, "totalResults": 1, "resultsShared": 1}
-
-        except UnicodeDecodeError:
-            import os
-
-            size = os.path.getsize(file_path)
+        data = response.content
+        total = int(response.headers.get("content-range", "").rpartition("/")[2] or len(data))
+        if b"\x00" in data:
             return {
-                "formatted": f"Binary file ({_format_size(size)})",
+                "formatted": f"Binary file ({_format_size(total)})",
                 "totalResults": 1,
                 "resultsShared": 1,
             }
+
+        content = data.decode("utf-8", errors="replace")
+        truncated = total > len(data) or len(content) > max_chars
+        content = content[:max_chars]
+        blob_url = f"{_build_repo_url(repo_id, repo_type)}/blob/{revision}/{path}"
+        response_text = (
+            f"**{path}**{' (truncated)' if truncated else ''}\n{blob_url}\n\n```\n{content}\n```"
+        )
+        return {"formatted": response_text, "totalResults": 1, "resultsShared": 1}
 
     async def _upload(self, args: Dict[str, Any]) -> ToolResult:
         """Upload content to a repository."""
@@ -311,6 +310,10 @@ HF_REPO_FILES_TOOL_SPEC = {
             "content": {
                 "type": "string",
                 "description": "File content for upload",
+            },
+            "max_chars": {
+                "type": "integer",
+                "description": "Maximum characters returned by read (default: 50000)",
             },
             "patterns": {
                 "type": "array",
