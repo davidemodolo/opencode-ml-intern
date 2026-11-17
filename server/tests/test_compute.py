@@ -147,6 +147,17 @@ def test_sigkill_noticed_after_a_restart_uses_the_exit_time(tmp_path):
     assert job.state == JobState.FAILED and job.duration_seconds == 600
 
 
+def test_reconcile_probes_the_gpus_once_for_all_queued_jobs(tmp_path):
+    probes = []
+    store = JobStore(tmp_path)
+    backend = LocalBackend(store, [sys.executable], gpu_probe=lambda: probes.append(1) or ONE_GPU)
+    service = ComputeService(store, {"local": backend})
+    for name in "abc":
+        store.create(JobSpec(name=name, script="import time; time.sleep(1)"))
+    service.reconcile()
+    assert len(probes) == 1
+
+
 def test_vram_larger_than_any_gpu_fails_fast(tmp_path):
     service = make_service(tmp_path)
     with pytest.raises(ComputeError, match="largest GPU has 8.0 GB"):
