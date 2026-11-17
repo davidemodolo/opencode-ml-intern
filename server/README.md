@@ -13,7 +13,8 @@ Ported from [ml-intern](https://github.com/huggingface/ml-intern) (Apache-2.0):
 | `fetch_hf_docs` | Reads an HF documentation page as markdown |
 | `find_hf_api` | Finds HF Hub REST endpoints with curl examples |
 | `hf_inspect_dataset` | Shows dataset configs, splits, schema and sample rows |
-| `hf_repo_files` | Lists, reads, uploads and deletes files in HF repos |
+| `hf_repo_files` | Lists and reads files in HF repos |
+| `hf_repo_write` | Uploads and deletes files in HF repos |
 | `github_find_examples` | Finds example files in a GitHub repository |
 | `github_list_repos` | Lists the repositories of a GitHub user or organization |
 | `github_read_file` | Reads a file from a GitHub repository |

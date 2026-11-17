@@ -17,7 +17,11 @@ from ml_intern_mcp.tools import (
 )
 from ml_intern_mcp.tools.github_find_examples import github_find_examples_handler
 from ml_intern_mcp.tools.github_read_file import github_read_file_handler, read_file
-from ml_intern_mcp.tools.hf_repo_files_tool import HfRepoFilesTool
+from ml_intern_mcp.tools.hf_repo_files_tool import (
+    HfRepoFilesTool,
+    hf_repo_files_handler,
+    hf_repo_write_handler,
+)
 
 
 class FakeResponse:
@@ -250,3 +254,13 @@ async def test_hf_repo_read_truncates_text_to_max_chars(monkeypatch):
     result = await tool.execute(args)
     assert "(truncated)" in result["formatted"] and "x" * 11 not in result["formatted"]
     assert "max_chars" in hf_repo_files_tool.HF_REPO_FILES_TOOL_SPEC["parameters"]["properties"]
+
+
+async def test_hf_repo_files_cannot_write_and_hf_repo_write_cannot_read():
+    for operation in ["upload", "delete"]:
+        text, ok = await hf_repo_files_handler({"operation": operation, "repo_id": "r"})
+        assert not ok and "Valid: list, read" in text
+    text, ok = await hf_repo_write_handler({"operation": "read", "repo_id": "r", "path": "a"})
+    assert not ok and "Valid: upload, delete" in text
+    spec = hf_repo_files_tool.HF_REPO_FILES_TOOL_SPEC["parameters"]["properties"]["operation"]
+    assert spec["enum"] == ["list", "read"]

@@ -17,4 +17,4 @@ async def test_research_tools_are_listed_with_their_specs():
         listed = {tool.name: tool for tool in (await client.list_tools()).tools}
     for tool in tools:
         assert listed[tool.name].input_schema == tool.parameters
-    assert {"hf_papers", "hf_inspect_dataset", "github_read_file"} <= listed.keys()
+    assert {"hf_papers", "hf_inspect_dataset", "github_read_file", "hf_repo_write"} <= listed.keys()
