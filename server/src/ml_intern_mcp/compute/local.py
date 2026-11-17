@@ -4,6 +4,7 @@ import signal
 import subprocess
 import time
 from collections.abc import Callable
+from pathlib import Path
 
 from ml_intern_mcp.compute.models import Gpu, Hardware, Job, JobState
 from ml_intern_mcp.compute.store import JobStore
@@ -37,6 +38,13 @@ def probe_nvidia_gpus() -> list[Gpu]:
         return gpus
     finally:
         pynvml.nvmlShutdown()
+
+
+def _child_pids(pid: int) -> list[int]:
+    try:
+        return [int(child) for child in Path(f"/proc/{pid}/task/{pid}/children").read_text().split()]
+    except OSError:
+        return []
 
 
 def _alive(pid: int) -> bool:
@@ -110,10 +118,12 @@ class LocalBackend:
 
     def cancel(self, job: Job) -> None:
         if job.pid is not None and _alive(job.pid):
-            try:
-                os.killpg(job.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            # timeout(1) moves itself and the script into a process group of its own
+            for group in [*_child_pids(job.pid), job.pid]:
+                try:
+                    os.killpg(group, signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    pass
         job.state = JobState.CANCELLED
         job.finished_at = time.time()
         self._processes.pop(job.id, None)

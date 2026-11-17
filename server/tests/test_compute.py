@@ -5,7 +5,7 @@ import time
 import pytest
 from mcp import Client
 
-from ml_intern_mcp.compute.local import LocalBackend
+from ml_intern_mcp.compute.local import LocalBackend, _alive
 from ml_intern_mcp.compute.models import Gpu, JobSpec, JobState
 from ml_intern_mcp.compute.service import ComputeError, ComputeService
 from ml_intern_mcp.compute.store import JobStore
@@ -80,6 +80,22 @@ def test_cancel_stops_the_process_group(tmp_path):
     service.reconcile()
     assert service.get(job.id).state == JobState.CANCELLED
     assert (tmp_path / "events" / f"{job.id}.json").exists()
+
+
+def test_cancel_kills_the_script_process(tmp_path):
+    service = make_service(tmp_path)
+    script = "import os, pathlib, time; pathlib.Path('pid').write_text(str(os.getpid())); time.sleep(60)"
+    job = service.submit(JobSpec(name="forever", script=script))
+    pid_file = service.store.folder(job.id) / "pid"
+    deadline = time.time() + 10
+    while not pid_file.exists() and time.time() < deadline:
+        time.sleep(0.05)
+    pid = int(pid_file.read_text())
+    service.cancel(job.id)
+    deadline = time.time() + 5
+    while _alive(pid) and time.time() < deadline:
+        time.sleep(0.05)
+    assert not _alive(pid)
 
 
 def test_timeout_exit_code_marks_the_job_timed_out(tmp_path):
