@@ -109,17 +109,19 @@ export default Plugin.define({
       if (correction) await notify(event.sessionID, correction, false)
     })
 
+    const contextFor = async (sessionID: string) => {
+      const [jobs, plan] = await Promise.all([ledger.forSession(sessionID), readPlan(sessionID)])
+      return sessionContext({ hfUser: user, limits: options, jobs, plan })
+    }
+
     await ctx.session.hook("context", async (event) => {
       if (event.agent !== ML_INTERN_AGENT) return
-      const [jobs, plan] = await Promise.all([ledger.forSession(event.sessionID), readPlan(event.sessionID)])
-      event.system.push({ type: "text", text: sessionContext({ hfUser: user, limits: options, jobs, plan }) } as any)
+      event.system.push({ type: "text", text: await contextFor(event.sessionID) } as any)
     })
 
     await ctx.session.hook("compaction", async (event) => {
       if (event.agent !== ML_INTERN_AGENT) return
-      const [jobs, plan] = await Promise.all([ledger.forSession(event.sessionID), readPlan(event.sessionID)])
-      const context = sessionContext({ hfUser: user, limits: options, jobs, plan })
-      event.system.push({ type: "text", text: COMPACTION_NOTE + "\n\n" + context } as any)
+      event.system.push({ type: "text", text: COMPACTION_NOTE + "\n\n" + (await contextFor(event.sessionID)) } as any)
     })
 
     const watcher = new EventWatcher(
