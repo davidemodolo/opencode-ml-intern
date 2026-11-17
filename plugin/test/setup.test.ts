@@ -21,7 +21,7 @@ describe("agents", () => {
       { update: (id, fn) => fn((agents[id] ??= { permissions: [{ action: "*", resource: "*", effect: "allow" }] })) },
       resolveOptions({}, {}),
     )
-    expect(agents[ML_INTERN_AGENT].mode).toBe("primary")
+    expect(agents[ML_INTERN_AGENT]).toMatchObject({ mode: "primary", name: "ML Intern", color: "#2EC4B6" })
     expect(agents[ML_INTERN_AGENT].permissions).toContainEqual({ action: "ml-intern_submit_job", resource: "*", effect: "ask" })
     const research = agents[ML_RESEARCH_AGENT]
     expect(research.mode).toBe("subagent")
