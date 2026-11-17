@@ -1,0 +1,41 @@
+{
+  "name": "opencode-ml-intern",
+  "version": "0.1.0",
+  "description": "opencode plugin that turns opencode into an ML engineering agent with research and GPU compute tools",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "Davide Modolo <davide.modolo98@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidemodolo/opencode-ml-intern.git",
+    "directory": "plugin"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "mcp",
+    "machine-learning"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}
