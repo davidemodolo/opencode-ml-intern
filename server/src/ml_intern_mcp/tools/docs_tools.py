@@ -596,16 +596,15 @@ def _generate_curl_example(endpoint: dict[str, Any]) -> str:
             )
             full_path = full_path.replace(f"{{{name}}}", str(example))
 
-    curl = f"curl -X {method} \\\n  '{base_url}{full_path}'"
-
     # Add query parameters
     query_params = [p for p in endpoint.get("parameters", []) if p.get("in") == "query"]
     if query_params and query_params[0].get("required"):
         param = query_params[0]
         example = param.get("example", param.get("schema", {}).get("example", "value"))
-        curl += f"?{param['name']}={example}"
+        full_path += f"?{param['name']}={example}"
 
-    curl += " \\\n  -H 'Authorization: Bearer $HF_TOKEN'"
+    curl = f"curl -X {method} \\\n  '{base_url}{full_path}'"
+    curl += ' \\\n  -H "Authorization: Bearer $HF_TOKEN"'
 
     # Add request body
     if method in ["POST", "PUT", "PATCH"] and endpoint.get("request_body"):

@@ -1,4 +1,5 @@
 import asyncio
+import subprocess
 import time
 
 import httpx
@@ -147,3 +148,21 @@ async def test_fetch_hf_docs_only_sends_the_token_to_hugging_face(monkeypatch):
         {"url": "https://huggingface.co/docs/trl/sft_trainer"}, session=session
     )
     assert ok and requested == [("/docs/trl/sft_trainer.md", {})]
+
+
+def test_find_hf_api_curl_examples_run_in_a_shell():
+    endpoint = {
+        "method": "GET",
+        "path": "/api/models/{repo_id}",
+        "base_url": "https://huggingface.co",
+        "parameters": [
+            {"name": "repo_id", "in": "path", "required": True},
+            {"name": "search", "in": "query", "required": True},
+        ],
+    }
+    command = docs_tools._generate_curl_example(endpoint).replace("curl", "printf '%s\\n'", 1)
+    output = subprocess.run(
+        ["sh", "-c", command], capture_output=True, text=True, env={"HF_TOKEN": "abc"}, check=True
+    ).stdout.splitlines()
+    assert "https://huggingface.co/api/models/<repo_id>?search=value" in output
+    assert "Authorization: Bearer abc" in output
