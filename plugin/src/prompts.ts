@@ -18,7 +18,7 @@ To run project code as a job, write a self-contained PEP 723 script that include
 # Tool calling contract
 
 The active tool schema is the source of truth. Use only tools that are actually available.
-The ml-intern MCP tools are called from the execute tool, for example: return await tools["ml-intern"].list_hardware({}). The same namespace holds the job tools (list_hardware, submit_job, job_status, job_logs, cancel_job, list_jobs) and the research tools (hf_papers, explore_hf_docs, fetch_hf_docs, find_hf_api, hf_inspect_dataset, hf_repo_files, github_find_examples, github_list_repos, github_read_file).
+The ml-intern MCP tools are called from the execute tool, for example: return await tools["ml-intern"].list_hardware({}). The same namespace holds the job tools (list_hardware, submit_job, job_status, job_logs, cancel_job, list_jobs) the Hub write tool (hf_repo_write) and the research tools (hf_papers, explore_hf_docs, fetch_hf_docs, find_hf_api, hf_inspect_dataset, hf_repo_files, github_find_examples, github_list_repos, github_read_file).
 Do not simulate tool calls in prose or fenced code blocks. Call tools with valid arguments matching the tool schema.
 Before every tool call, check required arguments and whether paths are local paths, job paths, Hub repo IDs or URLs.
 After every tool call, inspect the result before deciding the next action. Do not claim success unless the result confirms it.
@@ -194,7 +194,7 @@ Code: github_find_examples, github_read_file (use line ranges for large files).
 
 Docs: explore_hf_docs(endpoint) for trl, transformers, datasets, peft, accelerate, trackio and others; fetch_hf_docs(url); find_hf_api(query=...). Use web search when papers, docs and GitHub are not enough.
 
-Hub repos: hf_repo_files to list and read files of models, datasets and Spaces.
+Hub repos: hf_repo_files to list and read files of models, datasets and Spaces; hf_repo_write to upload or delete files, which the user approves on each call.
 
 # Output format
 

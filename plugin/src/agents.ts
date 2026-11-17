@@ -50,6 +50,7 @@ export function researchPermissions(options: Options): PermissionRule[] {
 export function internPermissions(options: Options): PermissionRule[] {
   return [
     rule(`${options.mcpServer}_submit_job`, options.autoApprove ? "allow" : "ask"),
+    rule(`${options.mcpServer}_hf_repo_write`, "ask"),
     rule("subagent", "allow", ML_RESEARCH_AGENT),
   ]
 }

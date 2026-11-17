@@ -28,6 +28,10 @@ describe("agents", () => {
     expect(research.permissions[0]).toEqual({ action: "*", resource: "*", effect: "deny" })
     expect(research.permissions).toContainEqual({ action: "ml-intern_hf_papers", resource: "*", effect: "allow" })
     expect(research.permissions.some((p: any) => p.action.endsWith("submit_job"))).toBe(false)
+    expect(research.permissions.some((p: any) => p.action.endsWith("hf_repo_write"))).toBe(false)
+    const approved = resolveOptions({ autoApprove: true }, {})
+    configureAgents({ update: (id, fn) => fn((agents[id] = { permissions: [] })) }, approved)
+    expect(agents[ML_INTERN_AGENT].permissions).toContainEqual({ action: "ml-intern_hf_repo_write", resource: "*", effect: "ask" })
   })
 })
 
