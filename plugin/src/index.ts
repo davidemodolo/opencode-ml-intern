@@ -4,7 +4,8 @@ import { sessionContext } from "./context.js"
 import { EventWatcher, formatEvent } from "./events.js"
 import { hfUser } from "./hf.js"
 import { registerServer } from "./mcp.js"
-import { gateReason, JobLedger } from "./ledger.js"
+import { SubmitGate, timeoutOf } from "./gate.js"
+import { JobLedger } from "./ledger.js"
 import { LoopGuard } from "./loop-guard.js"
 import { PollGuard } from "./poll-guard.js"
 import { resolveOptions } from "./options.js"
@@ -27,6 +28,7 @@ export default Plugin.define({
     const submitTool = `${options.mcpServer}_submit_job`
     const statusTool = `${options.mcpServer}_job_status`
     const ledger = new JobLedger(ctx.storage)
+    const gate = new SubmitGate(ledger, options)
     const guard = new LoopGuard(options.loopThreshold)
     const polls = new PollGuard(options.loopThreshold)
     const skills = await loadSkills()
@@ -77,25 +79,27 @@ export default Plugin.define({
         if (reason) throw new Error(reason)
       }
       if (event.tool === submitTool) {
-        const timeout = Number((event.input as { timeout_minutes?: unknown })?.timeout_minutes ?? 60)
-        const reason = gateReason(await ledger.forSession(event.sessionID), timeout, options)
+        const reason = await gate.reserve(event.id, event.sessionID, timeoutOf(event.input))
         if (reason) throw new Error(reason)
       }
     })
 
     await ctx.tool.hook("execute.after", async (event) => {
       if (event.tool === CODE_MODE_TOOL) return
-      if (event.tool === submitTool && event.status === "completed") {
-        const jobId = jobIdFrom(event.result)
-        if (jobId) {
-          const input = (event.input ?? {}) as { name?: string; timeout_minutes?: number }
-          await ledger.add({
-            jobId,
-            sessionID: event.sessionID,
-            name: input.name ?? jobId,
-            timeoutMinutes: input.timeout_minutes ?? 60,
-            submittedAt: Date.now(),
-          })
+      if (event.tool === submitTool) {
+        const jobId = event.status === "completed" ? jobIdFrom(event.result) : undefined
+        try {
+          if (jobId) {
+            await ledger.add({
+              jobId,
+              sessionID: event.sessionID,
+              name: (event.input as { name?: string } | undefined)?.name ?? jobId,
+              timeoutMinutes: timeoutOf(event.input),
+              submittedAt: Date.now(),
+            })
+          }
+        } finally {
+          gate.release(event.id)
         }
       }
       if (!GUARDED_AGENTS.has(event.agent)) return
