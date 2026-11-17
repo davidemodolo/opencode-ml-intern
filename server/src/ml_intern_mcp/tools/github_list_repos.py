@@ -4,6 +4,7 @@ GitHub List Repositories Tool - List and sort repositories for any user or organ
 Efficiently discover repositories with flexible sorting options.
 """
 
+import asyncio
 from typing import Any, Dict, Literal, Optional
 
 import requests
@@ -223,7 +224,8 @@ GITHUB_LIST_REPOS_TOOL_SPEC = {
 async def github_list_repos_handler(arguments: Dict[str, Any]) -> tuple[str, bool]:
     """Handler for agent tool router"""
     try:
-        result = list_repos(
+        result = await asyncio.to_thread(
+            list_repos,
             owner=arguments["owner"],
             owner_type=arguments.get("owner_type", "org"),
             sort=arguments.get("sort", "stars"),

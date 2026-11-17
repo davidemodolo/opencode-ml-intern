@@ -97,14 +97,15 @@ class HfRepoFilesTool:
         revision = args.get("revision", "main")
         path = args.get("path", "")
 
-        items = list(
-            await _async_call(
-                self.api.list_repo_tree,
-                repo_id=repo_id,
-                repo_type=repo_type,
-                revision=revision,
-                path_in_repo=path,
-                recursive=True,
+        items = await _async_call(
+            lambda: list(
+                self.api.list_repo_tree(
+                    repo_id=repo_id,
+                    repo_type=repo_type,
+                    revision=revision,
+                    path_in_repo=path,
+                    recursive=True,
+                )
             )
         )
 

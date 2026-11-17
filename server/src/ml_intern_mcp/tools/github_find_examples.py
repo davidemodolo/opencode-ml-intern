@@ -4,6 +4,7 @@ GitHub Find Examples Tool - Discover examples, tutorials, and guides for any lib
 Lists all files in a repository and performs deterministic keyword search.
 """
 
+import asyncio
 from typing import Any, Dict, List
 
 import requests
@@ -421,7 +422,8 @@ GITHUB_FIND_EXAMPLES_TOOL_SPEC = {
 async def github_find_examples_handler(arguments: Dict[str, Any]) -> tuple[str, bool]:
     """Handler for agent tool router"""
     try:
-        result = find_examples(
+        result = await asyncio.to_thread(
+            find_examples,
             keyword=arguments.get("keyword", ""),
             repo=arguments["repo"],
             org=arguments.get("org", "huggingface"),

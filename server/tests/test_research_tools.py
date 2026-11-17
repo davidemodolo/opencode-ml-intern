@@ -1,6 +1,13 @@
+import asyncio
+import time
+
 import pytest
+import requests
 
 from ml_intern_mcp.tools import github_list_repos
+from ml_intern_mcp.tools.github_find_examples import github_find_examples_handler
+from ml_intern_mcp.tools.github_read_file import github_read_file_handler
+from ml_intern_mcp.tools.hf_repo_files_tool import HfRepoFilesTool
 
 
 class FakeResponse:
@@ -46,3 +53,31 @@ def test_list_repos_lets_github_sort_by_stars(two_pages_of_repos):
 async def test_list_repos_handler_defaults_to_30_results(two_pages_of_repos):
     text, ok = await github_list_repos.github_list_repos_handler({"owner": "o"})
     assert ok and text.startswith("**Found 30 repositories")
+
+
+async def test_github_handlers_do_not_block_the_event_loop(monkeypatch, github_token):
+    def slow_get(*args, **kwargs):
+        time.sleep(0.5)
+        return FakeResponse({}, status_code=500)
+
+    monkeypatch.setattr(requests, "get", slow_get)
+    start = time.monotonic()
+    await asyncio.gather(
+        github_list_repos.github_list_repos_handler({"owner": "o"}),
+        github_read_file_handler({"repo": "o/r", "path": "a.py"}),
+        github_find_examples_handler({"repo": "r"}),
+    )
+    assert time.monotonic() - start < 1.0
+
+
+async def test_hf_repo_listing_pages_off_the_event_loop():
+    class SlowTreeApi:
+        def list_repo_tree(self, **kwargs):
+            time.sleep(0.5)
+            yield from []
+
+    tool = HfRepoFilesTool()
+    tool.api = SlowTreeApi()
+    start = time.monotonic()
+    await asyncio.gather(*(tool.execute({"operation": "list", "repo_id": "r"}) for _ in range(3)))
+    assert time.monotonic() - start < 1.0
