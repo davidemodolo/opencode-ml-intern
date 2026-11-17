@@ -29,7 +29,6 @@ class Gpu:
 class Hardware:
     backend: str
     gpus: list[Gpu]
-    hourly_cost_usd: float = 0.0
 
 
 @dataclass
