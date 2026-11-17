@@ -125,7 +125,7 @@ cd e2e
 XDG_CONFIG_HOME=$PWD/.config ML_INTERN_DATA_DIR=$PWD/.data opencode --standalone
 ```
 
-Pick the `ml-intern` agent with Tab and try, from the quickest to the longest:
+Pick the `ml-intern` agent with shift+tab and try, from the quickest to the longest:
 
 | Prompt | What it exercises |
 |---|---|
