@@ -10,7 +10,7 @@ from typing import Any, TypedDict
 
 import httpx
 
-from ml_intern_mcp.tools.types import ToolResult
+from ml_intern_mcp.tools.types import ToolResult, handler_output
 
 BASE_URL = "https://datasets-server.huggingface.co"
 
@@ -436,6 +436,6 @@ async def hf_inspect_dataset_handler(
             sample_rows=min(arguments.get("sample_rows", 3), 10),
             hf_token=hf_token,
         )
-        return result["formatted"], not result.get("isError", False)
+        return handler_output(result)
     except Exception as e:
         return f"Error inspecting dataset: {str(e)}", False

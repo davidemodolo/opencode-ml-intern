@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 from huggingface_hub import HfApi, hf_hub_download
 from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
 
-from ml_intern_mcp.tools.types import ToolResult
+from ml_intern_mcp.tools.types import ToolResult, error_result, handler_output
 
 
 async def _async_call(func, *args, **kwargs):
@@ -60,16 +60,16 @@ class HfRepoFilesTool:
             if handler:
                 return await handler(args)
             else:
-                return self._error(
+                return error_result(
                     f"Unknown operation: {operation}. Valid: list, read, upload, delete"
                 )
 
         except RepositoryNotFoundError:
-            return self._error(f"Repository not found: {args.get('repo_id')}")
+            return error_result(f"Repository not found: {args.get('repo_id')}")
         except EntryNotFoundError:
-            return self._error(f"File not found: {args.get('path')}")
+            return error_result(f"File not found: {args.get('path')}")
         except Exception as e:
-            return self._error(f"Error: {str(e)}")
+            return error_result(f"Error: {str(e)}")
 
     def _help(self) -> ToolResult:
         """Show usage instructions."""
@@ -91,7 +91,7 @@ class HfRepoFilesTool:
         """List files in a repository."""
         repo_id = args.get("repo_id")
         if not repo_id:
-            return self._error("repo_id is required")
+            return error_result("repo_id is required")
 
         repo_type = args.get("repo_type", "model")
         revision = args.get("revision", "main")
@@ -142,9 +142,9 @@ class HfRepoFilesTool:
         path = args.get("path")
 
         if not repo_id:
-            return self._error("repo_id is required")
+            return error_result("repo_id is required")
         if not path:
-            return self._error("path is required")
+            return error_result("path is required")
 
         repo_type = args.get("repo_type", "model")
         revision = args.get("revision", "main")
@@ -189,11 +189,11 @@ class HfRepoFilesTool:
         content = args.get("content")
 
         if not repo_id:
-            return self._error("repo_id is required")
+            return error_result("repo_id is required")
         if not path:
-            return self._error("path is required")
+            return error_result("path is required")
         if content is None:
-            return self._error("content is required")
+            return error_result("content is required")
 
         repo_type = args.get("repo_type", "model")
         revision = args.get("revision", "main")
@@ -227,9 +227,9 @@ class HfRepoFilesTool:
         patterns = args.get("patterns")
 
         if not repo_id:
-            return self._error("repo_id is required")
+            return error_result("repo_id is required")
         if not patterns:
-            return self._error("patterns is required (list of paths/wildcards)")
+            return error_result("patterns is required (list of paths/wildcards)")
 
         if isinstance(patterns, str):
             patterns = [patterns]
@@ -251,15 +251,6 @@ class HfRepoFilesTool:
 
         response = f"**Deleted:** {', '.join(patterns)} from {repo_id}"
         return {"formatted": response, "totalResults": 1, "resultsShared": 1}
-
-    def _error(self, message: str) -> ToolResult:
-        """Return an error result."""
-        return {
-            "formatted": message,
-            "totalResults": 0,
-            "resultsShared": 0,
-            "isError": True,
-        }
 
 
 # Tool specification
@@ -344,6 +335,6 @@ async def hf_repo_files_handler(
         hf_token = session.hf_token if session else None
         tool = HfRepoFilesTool(hf_token=hf_token, session=session)
         result = await tool.execute(arguments)
-        return result["formatted"], not result.get("isError", False)
+        return handler_output(result)
     except Exception as e:
         return f"Error: {str(e)}", False

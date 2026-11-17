@@ -14,7 +14,7 @@ import requests
 from nbconvert import MarkdownExporter
 from nbconvert.preprocessors import ClearOutputPreprocessor, TagRemovePreprocessor
 
-from ml_intern_mcp.tools.types import ToolResult
+from ml_intern_mcp.tools.types import ToolResult, error_result, handler_output
 
 
 def _convert_ipynb_to_markdown(content: str) -> str:
@@ -86,21 +86,11 @@ def read_file(
     """
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
-        return {
-            "formatted": "Error: GITHUB_TOKEN environment variable is required",
-            "totalResults": 0,
-            "resultsShared": 0,
-            "isError": True,
-        }
+        return error_result("Error: GITHUB_TOKEN environment variable is required")
 
     # Parse repo
     if "/" not in repo:
-        return {
-            "formatted": "Error: repo must be in format 'owner/repo'",
-            "totalResults": 0,
-            "resultsShared": 0,
-            "isError": True,
-        }
+        return error_result("Error: repo must be in format 'owner/repo'")
 
     owner, repo_name = repo.split("/", 1)
 
@@ -120,12 +110,7 @@ def read_file(
         response = requests.get(url, headers=headers, params=params, timeout=30)
 
         if response.status_code == 404:
-            return {
-                "formatted": f"File not found: {path} in {repo} (ref: {ref})",
-                "totalResults": 0,
-                "resultsShared": 0,
-                "isError": True,
-            }
+            return error_result(f"File not found: {path} in {repo} (ref: {ref})")
 
         if response.status_code != 200:
             error_msg = f"GitHub API error (status {response.status_code})"
@@ -135,23 +120,13 @@ def read_file(
                     error_msg += f": {error_data['message']}"
             except Exception:
                 pass
-            return {
-                "formatted": error_msg,
-                "totalResults": 0,
-                "resultsShared": 0,
-                "isError": True,
-            }
+            return error_result(error_msg)
 
         data = response.json()
 
         # Check if it's a file
         if data.get("type") != "file":
-            return {
-                "formatted": f"Path {path} is not a file (type: {data.get('type')})",
-                "totalResults": 0,
-                "resultsShared": 0,
-                "isError": True,
-            }
+            return error_result(f"Path {path} is not a file (type: {data.get('type')})")
 
         # Decode content
         content_b64 = data.get("content", "")
@@ -169,12 +144,7 @@ def read_file(
                 url, headers=raw_headers, params=params, timeout=30
             )
             if raw_response.status_code != 200:
-                return {
-                    "formatted": "Failed to fetch file content",
-                    "totalResults": 0,
-                    "resultsShared": 0,
-                    "isError": True,
-                }
+                return error_result("Failed to fetch file content")
             content = raw_response.text
 
         if path.lower().endswith(".ipynb"):
@@ -206,12 +176,7 @@ def read_file(
             line_start = max(1, line_start)
             line_end = min(total_lines, line_end)
             if line_start > line_end:
-                return {
-                    "formatted": f"Invalid range: line_start ({line_start}) > line_end ({line_end})",
-                    "totalResults": 0,
-                    "resultsShared": 0,
-                    "isError": True,
-                }
+                return error_result(f"Invalid range: line_start ({line_start}) > line_end ({line_end})")
 
         # Extract lines
         selected_lines = lines[line_start - 1 : line_end]
@@ -238,12 +203,7 @@ def read_file(
         }
 
     except requests.exceptions.RequestException as e:
-        return {
-            "formatted": f"Failed to connect to GitHub API: {str(e)}",
-            "totalResults": 0,
-            "resultsShared": 0,
-            "isError": True,
-        }
+        return error_result(f"Failed to connect to GitHub API: {str(e)}")
 
 
 # Tool specification
@@ -297,6 +257,6 @@ async def github_read_file_handler(arguments: Dict[str, Any]) -> tuple[str, bool
             line_start=arguments.get("line_start"),
             line_end=arguments.get("line_end"),
         )
-        return result["formatted"], not result.get("isError", False)
+        return handler_output(result)
     except Exception as e:
         return f"Error reading file: {str(e)}", False

@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 import requests
 from thefuzz import fuzz
 
-from ml_intern_mcp.tools.types import ToolResult
+from ml_intern_mcp.tools.types import ToolResult, error_result, handler_output
 
 # In order of priority (lower index = higher priority for sorting)
 EXAMPLE_PATTERNS = [
@@ -219,12 +219,7 @@ def _handle_repo_tree_errors(
         similar_repos = _search_similar_repos(org, repo, token)
 
         if not similar_repos:
-            return {
-                "formatted": f"Repository '{org}/{repo}' not found and no similar repositories found.",
-                "totalResults": 0,
-                "resultsShared": 0,
-                "isError": True,
-            }
+            return error_result(f"Repository '{org}/{repo}' not found and no similar repositories found.")
 
         # Format similar repos
         lines = [f"**Repository '{org}/{repo}' not found. Similar repositories:**\n"]
@@ -247,12 +242,7 @@ def _handle_repo_tree_errors(
         }
 
     if error:
-        return {
-            "formatted": f"Error accessing repository '{org}/{repo}': {error}",
-            "totalResults": 0,
-            "resultsShared": 0,
-            "isError": True,
-        }
+        return error_result(f"Error accessing repository '{org}/{repo}': {error}")
 
     if not all_files:
         return {
@@ -286,27 +276,17 @@ def find_examples(
     """
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
-        return {
-            "formatted": "Error: GITHUB_TOKEN environment variable is required",
-            "totalResults": 0,
-            "resultsShared": 0,
-            "isError": True,
-        }
+        return error_result("Error: GITHUB_TOKEN environment variable is required")
 
     if not repo:
-        return {
-            "formatted": "Error: repo parameter is required",
-            "totalResults": 0,
-            "resultsShared": 0,
-            "isError": True,
-        }
+        return error_result("Error: repo parameter is required")
 
     # Get all files in the repository
     all_files, error = _get_repo_tree(org, repo, token)
 
     # Handle errors (not found, API errors, empty repo)
-    if error_result := _handle_repo_tree_errors(all_files, error, org, repo, token):
-        return error_result
+    if tree_error := _handle_repo_tree_errors(all_files, error, org, repo, token):
+        return tree_error
 
     # Step 1: Filter files by example patterns (score >= 60)
     example_threshold = 60
@@ -455,6 +435,6 @@ async def github_find_examples_handler(arguments: Dict[str, Any]) -> tuple[str, 
             max_results=arguments.get("max_results", 50),
             min_score=arguments.get("min_score", 60),
         )
-        return result["formatted"], not result.get("isError", False)
+        return handler_output(result)
     except Exception as e:
         return f"Error finding examples: {str(e)}", False

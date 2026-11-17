@@ -9,7 +9,7 @@ from typing import Any, Dict, Literal, Optional
 
 import requests
 
-from ml_intern_mcp.tools.types import ToolResult
+from ml_intern_mcp.tools.types import ToolResult, error_result, handler_output
 
 
 def list_repos(
@@ -34,12 +34,7 @@ def list_repos(
     """
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
-        return {
-            "formatted": "Error: GITHUB_TOKEN environment variable is required",
-            "totalResults": 0,
-            "resultsShared": 0,
-            "isError": True,
-        }
+        return error_result("Error: GITHUB_TOKEN environment variable is required")
 
     if owner_type == "org":
         url = f"https://api.github.com/orgs/{owner}/repos"
@@ -90,12 +85,7 @@ def list_repos(
 
             if response.status_code == 403:
                 error_data = response.json()
-                return {
-                    "formatted": f"GitHub API rate limit or permission error: {error_data.get('message', 'Unknown error')}",
-                    "totalResults": 0,
-                    "resultsShared": 0,
-                    "isError": True,
-                }
+                return error_result(f"GitHub API rate limit or permission error: {error_data.get('message', 'Unknown error')}")
 
             if response.status_code != 200:
                 error_msg = f"GitHub API error (status {response.status_code})"
@@ -105,12 +95,7 @@ def list_repos(
                         error_msg += f": {error_data['message']}"
                 except Exception:
                     pass
-                return {
-                    "formatted": error_msg,
-                    "totalResults": 0,
-                    "resultsShared": 0,
-                    "isError": True,
-                }
+                return error_result(error_msg)
 
             items = response.json()
 
@@ -145,12 +130,7 @@ def list_repos(
             page += 1
 
     except requests.exceptions.RequestException as e:
-        return {
-            "formatted": f"Failed to connect to GitHub API: {str(e)}",
-            "totalResults": 0,
-            "resultsShared": 0,
-            "isError": True,
-        }
+        return error_result(f"Failed to connect to GitHub API: {str(e)}")
 
     # Manual sorting if needed (for stars/forks)
     if need_manual_sort and all_repos:
@@ -282,6 +262,6 @@ async def github_list_repos_handler(arguments: Dict[str, Any]) -> tuple[str, boo
             order=arguments.get("order", "desc"),
             limit=arguments.get("limit"),
         )
-        return result["formatted"], not result.get("isError", False)
+        return handler_output(result)
     except Exception as e:
         return f"Error listing repositories: {str(e)}", False
