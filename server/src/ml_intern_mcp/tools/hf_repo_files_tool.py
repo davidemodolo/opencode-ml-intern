@@ -166,6 +166,9 @@ class HfRepoFilesTool:
         revision = args.get("revision", "main")
         max_chars = args.get("max_chars", 50000)
 
+        if max_chars < 1:
+            return error_result("max_chars must be at least 1")
+
         url = hf_hub_url(repo_id, path, repo_type=repo_type, revision=revision)
         headers = {"Range": f"bytes=0-{max_chars * MAX_UTF8_BYTES - 1}"}
         if self.api.token:
@@ -174,9 +177,12 @@ class HfRepoFilesTool:
             response = await client.get(url, headers=headers)
         if response.status_code == 404:
             return error_result(f"File not found: {path}")
-        response.raise_for_status()
+        # An empty file cannot satisfy any byte range
+        empty = response.status_code == 416
+        if not empty:
+            response.raise_for_status()
 
-        data = response.content
+        data = b"" if empty else response.content
         total = int(response.headers.get("content-range", "").rpartition("/")[2] or len(data))
         if b"\x00" in data:
             return {
@@ -314,6 +320,7 @@ HF_REPO_FILES_TOOL_SPEC = {
             "max_chars": {
                 "type": "integer",
                 "description": "Maximum characters returned by read (default: 50000)",
+                "minimum": 1,
             },
         },
         "required": ["operation"],

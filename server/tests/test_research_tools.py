@@ -264,3 +264,18 @@ async def test_hf_repo_files_cannot_write_and_hf_repo_write_cannot_read():
     assert not ok and "Valid: upload, delete" in text
     spec = hf_repo_files_tool.HF_REPO_FILES_TOOL_SPEC["parameters"]["properties"]["operation"]
     assert spec["enum"] == ["list", "read"]
+
+
+async def test_hf_repo_read_handles_empty_files_and_rejects_zero_max_chars(monkeypatch):
+    real_client = httpx.AsyncClient
+    transport = httpx.MockTransport(lambda request: httpx.Response(416))
+    monkeypatch.setattr(
+        hf_repo_files_tool.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=transport, **kwargs),
+    )
+    tool = HfRepoFilesTool()
+    empty = await tool.execute({"operation": "read", "repo_id": "r", "path": "pkg/__init__.py"})
+    assert not empty.get("isError") and "```\n\n```" in empty["formatted"]
+    zero = await tool.execute({"operation": "read", "repo_id": "r", "path": "a", "max_chars": 0})
+    assert zero.get("isError")
