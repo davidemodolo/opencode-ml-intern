@@ -1,5 +1,7 @@
 # Phase 1: everything working on the local GPU
 
+Status: done. M0 to M4 are implemented; `node e2e/run.mjs --fresh` passes on the local GPU.
+
 Goal: reproduce ml-intern inside opencode V2 with an MCP server and a plugin, using the local machine's GPU as the only compute backend. The compute tool contract is backend agnostic, so phase 2 adds providers without touching the plugin or the prompt.
 
 ## Repository layout
@@ -84,11 +86,12 @@ Tests: a fake job that prints and exits, a failing job, timeout, cancel, server 
 
 ## M3. opencode plugin
 
+- **MCP server**: the plugin registers the `ml-intern` server (`uvx ml-intern-mcp==<version>`) through `mcp.transform` unless one with that name is configured, so installing the plugin is the only install step.
 - **Agents**: `ml-intern` (primary) and `ml-research` (read-only subagent: `* deny`, `read`, `skill` and the research MCP tools `allow`), created with `agent.transform`.
-- **Prompt**: port of `system_prompt_v3` adapted to code mode, MCP tools and the local GPU. Dynamic parts (hardware, active jobs, limits) go in `instructions.entry`, refreshed on every `prompt`.
-- **Compute gate**: `submit_job` goes through an `mlintern_compute` permission with resource `<backend>:<gpu>:<hours>` and `save: ["<backend>:*"]`. The model states hardware and cost before submitting, since the TUI prompt shows only the action. Locally `evaluate` limits concurrent jobs and GPU hours per session, stored in `ctx.storage`; in phase 2 the same point counts dollars.
-- **Doom loop**: hash of tool, normalized input and result on `execute.after`. At the threshold the call is blocked by throwing in `execute.before` and a corrective `synthetic` message is sent.
-- **Wake up**: watcher on the `events/` folder; when a job ends, `synthetic` with `resume: true`, the outcome and the last log lines. Undelivered events are delivered on plugin setup.
+- **Prompt**: port of `system_prompt_v3` adapted to code mode, MCP tools and the local GPU. A session context block (HF user, GPU hours, active jobs, plan) is added to every `ml-intern` request through the `context` hook.
+- **Compute gate**: the `ml-intern` agent has an `ask` permission on `ml-intern_submit_job` (`allow` with the `autoApprove` option). `execute.before` refuses a submission that exceeds the session limits on active jobs and GPU hours, tracked in `ctx.storage`; active jobs count with their timeout. In phase 2 the same point counts dollars.
+- **Doom loop**: port of ml-intern's detector: signatures of tool, normalized input and result recorded on `execute.after`, three identical calls or a repeating cycle of 2 to 5 calls trigger it. The repeated call is then blocked by throwing in `execute.before` and a corrective `synthetic` message is sent.
+- **Wake up**: watcher on the `events/` folder (file watch plus a periodic scan); when a job ends, `synthetic` with `resume: true`, the outcome and the last log lines. Undelivered events are delivered on plugin setup.
 - **`plan` tool**: list of steps with status, stored in `ctx.storage`, shown in the instructions.
 - **`/jobs` command**: job summary.
 - **Skills**: TRL recipes (SFT, DPO, GRPO), PEFT and LoRA, quantization for 8 GB, kernel selection.
@@ -99,9 +102,9 @@ Unit tests of the hooks with a fake context; integration tests in the `e2e/` pro
 ## M4. End to end, packaging and docs
 
 - Acceptance scenario: "LoRA fine-tune of a 0.5B model on an HF dataset and publish the adapter", run by `ml-intern` end to end on the local GPU.
-- npm package for the plugin and PyPI package for the server; one install step that adds the plugin and the MCP server to the opencode config.
+- npm package for the plugin and PyPI package for the server; `opencode plugin add opencode-ml-intern` installs both, since the plugin registers the server.
 - README with installation, configuration and hardware limits.
-- CI with lint, tests and the compatibility probes against the pinned opencode version.
+- CI with lint, unit tests and a check that the plugin loads and registers its agents on the pinned opencode version. The acceptance run needs a GPU and a model and runs locally with `node e2e/run.mjs`.
 
 ## Definition of done
 
