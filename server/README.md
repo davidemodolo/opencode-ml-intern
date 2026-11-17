@@ -51,5 +51,5 @@ Successful results of read-only tools are cached on disk for 6 hours in `$XDG_CA
 
 ```sh
 uv run pytest
-uv run python scripts/smoke_research.py   # live calls to every research tool
+ML_INTERN_LIVE=1 uv run pytest tests/test_research_live.py   # live calls to every research tool
 ```

@@ -1,12 +1,14 @@
-"""Calls each research tool once against the live services and prints a short summary."""
+import os
 
-import asyncio
-import sys
-
+import pytest
 from mcp import Client
 
 from ml_intern_mcp.research import ensure_github_token, load_api_search_spec, research_tools
 from ml_intern_mcp.server import build_server
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("ML_INTERN_LIVE") != "1", reason="set ML_INTERN_LIVE=1 to call live services"
+)
 
 CALLS = [
     ("hf_papers", {"operation": "search", "query": "LoRA fine-tuning", "limit": 2}),
@@ -21,23 +23,11 @@ CALLS = [
 ]
 
 
-async def main() -> int:
+@pytest.mark.parametrize(("name", "arguments"), CALLS, ids=[c[0] for c in CALLS])
+async def test_research_tool_live(name, arguments):
     ensure_github_token()
     tools = research_tools(api_search_spec=await load_api_search_spec())
-    failures = 0
     async with Client(build_server(tools)) as client:
-        names = {t.name for t in (await client.list_tools()).tools}
-        for name, arguments in CALLS:
-            if name not in names:
-                print(f"SKIP {name}: not registered")
-                continue
-            result = await client.call_tool(name, arguments)
-            text = result.content[0].text
-            status = "FAIL" if result.is_error else "OK"
-            failures += result.is_error
-            print(f"{status} {name}: {text[:160]!r}")
-    return 1 if failures else 0
-
-
-if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+        result = await client.call_tool(name, arguments)
+    assert not result.is_error, result.content[0].text
+    assert len(result.content[0].text) > 50
