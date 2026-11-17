@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, readdir, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -32,6 +32,7 @@ describe("EventWatcher", () => {
     watcher.stop()
     expect(delivered).toEqual(["s1:j1"])
     expect(await ledger.get("j1")).toMatchObject({ state: "succeeded", durationSeconds: 42.4, delivered: true })
+    expect((await readdir(join(dir, "events"))).sort()).toEqual(["j1.delivered", "other.json"])
   })
 
   it("delivers an event once when several watchers share the folder and the ledger", async () => {
