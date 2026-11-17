@@ -19,6 +19,10 @@ opencode plugin add opencode-ml-intern
 
 Requirements: opencode 2.3.0, [uv](https://docs.astral.sh/uv/) and an NVIDIA GPU for training jobs. The plugin registers the MCP server itself. Select the `ml-intern` agent (Tab in the TUI) and describe the training you want.
 
+## Hardware
+
+Each job runs on a single GPU. On a machine with several GPUs, jobs run in parallel, one per GPU, and the rest wait in a queue; a job fits when its model and training state fit in the VRAM of one GPU. The per-session limits (`maxActiveJobs`, default 4, and `maxGpuHours`, default 24) are plugin options, see [`plugin/README.md`](plugin/README.md).
+
 ## How it works
 
 ```mermaid

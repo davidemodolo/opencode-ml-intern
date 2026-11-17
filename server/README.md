@@ -31,7 +31,7 @@ Tokens: `HF_TOKEN` or the cached `hf auth login` token; `GITHUB_TOKEN` or the `g
 | `cancel_job` | Stops a queued or running job |
 | `list_jobs` | Jobs, optionally filtered by state |
 
-The `local` backend runs each job with `uv run --script` in its own process group, detached from the server, with `CUDA_VISIBLE_DEVICES` set to the assigned GPU. One job runs per GPU (one at a time on machines without a GPU) and the others wait in a queue. A job that declares more `vram_gb` than the largest GPU is rejected at submit time.
+The `local` backend runs each job with `uv run --script` in its own process group, detached from the server, with `CUDA_VISIBLE_DEVICES` set to the single GPU assigned to it. One job runs per GPU (one at a time on machines without a GPU) and the others wait in a queue. A job that declares more `vram_gb` than the largest GPU is rejected at submit time.
 
 Each job lives in `$XDG_DATA_HOME/ml-intern-mcp/jobs/<id>/` (`job.json`, `script.py`, `stdout.log`, `exit_code`), so jobs keep running and are picked up again when the server restarts. When a job ends the server writes `events/<id>.json` with its state, exit code, duration and last log lines; the opencode plugin reads these events to notify the session.
 
