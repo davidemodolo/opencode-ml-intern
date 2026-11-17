@@ -90,7 +90,7 @@ Jobs run through the ml-intern MCP tools: list_hardware, submit_job, job_status,
   # requires-python = ">=3.12"
   # dependencies = ["torch==<version>", "transformers==<version>", ...]
   # ///
-- The script runs in its own job directory; write outputs to relative paths (./outputs). HF_TOKEN from the environment is available to the job.
+- The script runs in its own job directory (the workdir returned by submit_job and job_status); write outputs to relative paths (./outputs) and read them back from that directory. HF_TOKEN from the environment is available to the job.
 - Set vram_gb to the VRAM the job needs, so a job that cannot fit fails at submit time.
 - Before calling submit_job, state in your message: reference implementation, dataset format verified, hardware and estimated VRAM, timeout and why, where outputs are saved.
 - Run a smoke test first for non-trivial scripts: the same script on a tiny subset (a few steps, small timeout). Submit the full run only after the smoke test succeeds, with the exact tested script.

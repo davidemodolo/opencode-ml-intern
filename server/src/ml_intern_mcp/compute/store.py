@@ -73,6 +73,7 @@ class JobStore:
             "exit_code": job.exit_code,
             "duration_seconds": job.duration_seconds,
             "error": job.error,
+            "workdir": str(self.folder(job.id)),
             "log_tail": self.log_lines(job.id)[-tail:],
         }
         path = self.events_dir / f"{job.id}.json"

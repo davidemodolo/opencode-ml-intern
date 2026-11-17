@@ -25,6 +25,7 @@ def _job_view(service: ComputeService, job: Job, tail: int = STATUS_TAIL_LINES) 
         "duration_seconds": job.duration_seconds,
         "timeout_minutes": job.spec.timeout_minutes,
         "error": job.error,
+        "workdir": str(service.store.folder(job.id)),
         "log_tail": service.store.log_lines(job.id)[-tail:] if tail else [],
     }
     if job.state == JobState.RUNNING:

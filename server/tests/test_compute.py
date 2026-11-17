@@ -131,6 +131,7 @@ async def test_compute_tools_over_mcp(tmp_path):
         missing = await client.call_tool("job_status", {"job_id": "nope"})
     assert hardware["backends"][0]["gpus"][0]["name"] == "Test GPU"
     assert status["state"] == "succeeded" and status["log_tail"] == ["over mcp"]
+    assert status["workdir"] == str(service.store.folder(job_id))
     assert logs["lines"] == ["over mcp"]
     assert [j["job_id"] for j in listed["jobs"]] == [job_id]
     assert missing.is_error and "does not exist" in missing.content[0].text

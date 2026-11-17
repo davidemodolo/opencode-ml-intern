@@ -11,6 +11,7 @@ export interface JobEvent {
   readonly exit_code: number | null
   readonly duration_seconds: number | null
   readonly error: string | null
+  readonly workdir?: string
   readonly log_tail: readonly string[]
 }
 
@@ -19,6 +20,7 @@ export function formatEvent(event: JobEvent): string {
   const exit = event.exit_code == null ? "" : `, exit code ${event.exit_code}`
   const lines = [`[ml-intern] Job ${event.job_id} (${event.name}) on ${event.backend} ${event.state}${duration}${exit}.`]
   if (event.error) lines.push(`Error: ${event.error}`)
+  if (event.workdir) lines.push(`Job directory (outputs are relative to it): ${event.workdir}`)
   if (event.log_tail.length) lines.push("Last log lines:", "```", ...event.log_tail, "```")
   lines.push("Read more with job_logs. Continue the task from here.")
   return lines.join("\n")
