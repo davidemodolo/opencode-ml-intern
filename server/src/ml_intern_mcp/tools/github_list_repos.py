@@ -42,42 +42,23 @@ def list_repos(
     if not token:
         return missing_token()
 
-    if owner_type == "org":
-        url = f"https://api.github.com/orgs/{owner}/repos"
-    else:
-        url = f"https://api.github.com/users/{owner}/repos"
-
     headers = github_headers(token)
+    per_page = 100  # Maximum allowed by GitHub
+
+    # The list API cannot sort by stars or forks, the search API can
+    if sort in ("stars", "forks"):
+        qualifier = "org" if owner_type == "org" else "user"
+        url = "https://api.github.com/search/repositories"
+        base_params = {"q": f"{qualifier}:{owner} fork:true", "sort": sort, "order": order}
+    else:
+        url = f"https://api.github.com/{'orgs' if owner_type == 'org' else 'users'}/{owner}/repos"
+        base_params = {"sort": sort, "direction": order}
 
     all_repos = []
     page = 1
-    per_page = 100  # Maximum allowed by GitHub
-
-    # Map our sort values to GitHub API sort values
-    # Note: GitHub list repos API doesn't support sorting by stars/forks
-    # We'll fetch all repos and sort in memory for those cases
-    api_sort_map = {
-        "created": "created",
-        "updated": "updated",
-        "stars": None,  # Not supported by list API
-        "forks": None,  # Not supported by list API
-    }
-
-    api_sort = api_sort_map.get(sort)
-    need_manual_sort = api_sort is None
-
     try:
         while True:
-            params = {
-                "page": page,
-                "per_page": per_page,
-            }
-
-            # Only add sort/direction if API supports it
-            if api_sort:
-                params["sort"] = api_sort
-                params["direction"] = order
-
+            params = {**base_params, "page": page, "per_page": per_page}
             response = requests.get(
                 url,
                 headers=headers,
@@ -92,7 +73,8 @@ def list_repos(
             if response.status_code != 200:
                 return error_result(github_error(response))
 
-            items = response.json()
+            data = response.json()
+            items = data.get("items", []) if isinstance(data, dict) else data
 
             if not items:
                 break
@@ -126,11 +108,6 @@ def list_repos(
 
     except requests.exceptions.RequestException as e:
         return error_result(f"Failed to connect to GitHub API: {str(e)}")
-
-    # Manual sorting if needed (for stars/forks)
-    if need_manual_sort and all_repos:
-        reverse = order == "desc"
-        all_repos.sort(key=lambda x: x[sort], reverse=reverse)
 
     # Apply limit after sorting
     if limit:
@@ -235,7 +212,7 @@ GITHUB_LIST_REPOS_TOOL_SPEC = {
             },
             "limit": {
                 "type": "integer",
-                "description": "Maximum number of repositories to return. No limit if not specified. Default: 30.",
+                "description": "Maximum number of repositories to return. Default: 30.",
             },
         },
         "required": ["owner"],
@@ -251,7 +228,7 @@ async def github_list_repos_handler(arguments: Dict[str, Any]) -> tuple[str, boo
             owner_type=arguments.get("owner_type", "org"),
             sort=arguments.get("sort", "stars"),
             order=arguments.get("order", "desc"),
-            limit=arguments.get("limit"),
+            limit=arguments.get("limit", 30),
         )
         return handler_output(result)
     except Exception as e:
