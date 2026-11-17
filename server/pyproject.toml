@@ -1,0 +1,33 @@
+[project]
+name = "ml-intern-mcp"
+version = "0.1.0"
+description = "MCP server with ML research and GPU compute tools for coding agents"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [{ name = "Davide Modolo", email = "davide.modolo98@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "mcp==2.3.0",
+]
+
+[project.scripts]
+ml-intern-mcp = "ml_intern_mcp.server:main"
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+    "pytest-asyncio==1.5.0",
+    "ruff==0.17.5",
+]
+
+[build-system]
+requires = ["uv_build==0.12.5"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
