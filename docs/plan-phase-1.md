@@ -36,14 +36,14 @@ The plan relies on these behaviors, confirmed with probe plugins:
 
 Monorepo scaffold, test runners (`vitest` for the plugin, `pytest` for the server), an opencode test project in `e2e/` that loads the plugin and the server from the repo.
 
-Spikes to close before M3, each with a probe in the repo:
+Spikes, closed with the probe in `spikes/` (details in `spikes.md`):
 
-| Spike | Question | Fallback |
+| Spike | Question | Outcome |
 |---|---|---|
-| S1 | Does `session.synthetic({resume: true})` wake an idle session? | A finished job is queued and delivered with the next prompt through the `prompt` hook |
-| S2 | How does the TUI show a permission request raised inside `execute`? | The gate asks up front through a dedicated `request_compute` tool |
-| S3 | Are plugin skills visible to a subagent with an explicit `skill` permission? | Recipes for the subagent go through `instructions.entry` |
-| S4 | Does a throw in `execute.before` or a `deny` in `evaluate` block a single repeated MCP call? | The doom loop block lives in the MCP server |
+| S1 | Does `session.synthetic({resume: true})` wake an idle session? | Yes, while the opencode server process stays alive |
+| S2 | How does the TUI show a permission request raised inside `execute`? | Generic prompt with the action name; `save` adds Always allow; resources and messages are not shown |
+| S3 | Are plugin skills visible to a subagent? | Yes, with an explicit `skill` allow rule |
+| S4 | Can a hook block a single repeated MCP call? | Yes, both from `execute.before` and from `evaluate` |
 
 ## M1. MCP server: research tools
 
@@ -84,11 +84,11 @@ Tests: a fake job that prints and exits, a failing job, timeout, cancel, server 
 
 ## M3. opencode plugin
 
-- **Agents**: `ml-intern` (primary) and `ml-research` (read-only subagent: `* deny`, `read` and the research MCP tools `allow`), created with `agent.transform`.
+- **Agents**: `ml-intern` (primary) and `ml-research` (read-only subagent: `* deny`, `read`, `skill` and the research MCP tools `allow`), created with `agent.transform`.
 - **Prompt**: port of `system_prompt_v3` adapted to code mode, MCP tools and the local GPU. Dynamic parts (hardware, active jobs, limits) go in `instructions.entry`, refreshed on every `prompt`.
-- **Compute gate**: `submit_job` goes through an `mlintern_compute` permission with resource `<backend>:<gpu>:<hours>`. Locally `evaluate` limits concurrent jobs and GPU hours per session, stored in `ctx.storage`; in phase 2 the same point counts dollars.
-- **Doom loop**: hash of tool, normalized input and result on `execute.after`. At the threshold: the call is blocked according to S4 and a corrective `synthetic` message is sent.
-- **Wake up**: watcher on the `events/` folder; when a job ends, `synthetic` with the outcome and the last log lines, according to S1.
+- **Compute gate**: `submit_job` goes through an `mlintern_compute` permission with resource `<backend>:<gpu>:<hours>` and `save: ["<backend>:*"]`. The model states hardware and cost before submitting, since the TUI prompt shows only the action. Locally `evaluate` limits concurrent jobs and GPU hours per session, stored in `ctx.storage`; in phase 2 the same point counts dollars.
+- **Doom loop**: hash of tool, normalized input and result on `execute.after`. At the threshold the call is blocked by throwing in `execute.before` and a corrective `synthetic` message is sent.
+- **Wake up**: watcher on the `events/` folder; when a job ends, `synthetic` with `resume: true`, the outcome and the last log lines. Undelivered events are delivered on plugin setup.
 - **`plan` tool**: list of steps with status, stored in `ctx.storage`, shown in the instructions.
 - **`/jobs` command**: job summary.
 - **Skills**: TRL recipes (SFT, DPO, GRPO), PEFT and LoRA, quantization for 8 GB, kernel selection.
