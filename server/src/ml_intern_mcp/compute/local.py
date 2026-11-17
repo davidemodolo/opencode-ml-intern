@@ -42,7 +42,9 @@ def probe_nvidia_gpus() -> list[Gpu]:
 
 def _child_pids(pid: int) -> list[int]:
     try:
-        return [int(child) for child in Path(f"/proc/{pid}/task/{pid}/children").read_text().split()]
+        return [
+            int(child) for child in Path(f"/proc/{pid}/task/{pid}/children").read_text().split()
+        ]
     except OSError:
         return []
 

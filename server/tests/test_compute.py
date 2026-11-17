@@ -85,7 +85,9 @@ def test_cancel_stops_the_process_group(tmp_path):
 
 def test_cancel_kills_the_script_process(tmp_path):
     service = make_service(tmp_path)
-    script = "import os, pathlib, time; pathlib.Path('pid').write_text(str(os.getpid())); time.sleep(60)"
+    script = (
+        "import os, pathlib, time; pathlib.Path('pid').write_text(str(os.getpid())); time.sleep(60)"
+    )
     job = service.submit(JobSpec(name="forever", script=script))
     pid_file = service.store.folder(job.id) / "pid"
     deadline = time.time() + 10
