@@ -68,10 +68,12 @@ async def inspect_dataset(
         splits_data = _payload(results[1], "splits", errors)
         if splits_data is not None:
             configs = _extract_configs(splits_data)
-            if not config:
-                config = configs[0]["name"] if configs else "default"
-            if not split:
-                split = configs[0]["splits"][0] if configs else "train"
+            chosen = next((c for c in configs if c["name"] == config), None)
+            chosen = chosen or (configs[0] if configs else None)
+            if not config and chosen:
+                config = chosen["name"]
+            if not split and chosen and chosen["splits"]:
+                split = chosen["splits"][0]
             _add_section(output_parts, errors, "splits", _format_structure, configs)
 
         if not config:

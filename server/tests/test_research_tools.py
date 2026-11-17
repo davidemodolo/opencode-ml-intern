@@ -117,3 +117,17 @@ async def test_inspect_dataset_reports_server_errors(monkeypatch):
     mock_datasets_server(monkeypatch, lambda path: (404, {"error": "The dataset does not exist."}))
     text, ok = await dataset_tools.hf_inspect_dataset_handler({"dataset": "o/missing"})
     assert not ok and "The dataset does not exist." in text
+
+
+async def test_inspect_dataset_takes_the_split_of_the_requested_config(monkeypatch):
+    splits = {
+        "splits": [
+            {"dataset": "d", "config": "a", "split": "train"},
+            {"dataset": "d", "config": "b", "split": "test"},
+        ]
+    }
+    requested = mock_datasets_server(
+        monkeypatch, lambda path: (200, splits) if path == "/splits" else (200, {})
+    )
+    await dataset_tools.hf_inspect_dataset_handler({"dataset": "d", "config": "b"})
+    assert ("/first-rows", {"dataset": "d", "config": "b", "split": "test"}) in requested
