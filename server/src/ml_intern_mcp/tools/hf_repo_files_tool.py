@@ -1,7 +1,7 @@
 """
 HF Repo Files Tool - File operations on Hugging Face repositories
 
-Operations: list, read, upload, delete
+hf_repo_files lists and reads, hf_repo_write uploads and deletes.
 """
 
 import asyncio
@@ -38,12 +38,29 @@ def _format_size(size_bytes: int) -> str:
     return f"{size_bytes:.1f}PB"
 
 
-class HfRepoFilesTool:
-    """Tool for file operations on HF repos."""
+READ_OPERATIONS = ("list", "read")
+WRITE_OPERATIONS = ("upload", "delete")
 
-    def __init__(self, hf_token: Optional[str] = None, session: Any = None):
+USAGE = {
+    "list": '`{"operation": "list", "repo_id": "gpt2"}`',
+    "read": '`{"operation": "read", "repo_id": "gpt2", "path": "config.json"}`',
+    "upload": '`{"operation": "upload", "repo_id": "my-model", "path": "README.md", "content": "..."}`',
+    "delete": '`{"operation": "delete", "repo_id": "my-model", "patterns": ["*.tmp"]}`',
+}
+
+
+class HfRepoFilesTool:
+    """Tool for file operations on HF repos, limited to the given operations."""
+
+    def __init__(
+        self,
+        hf_token: Optional[str] = None,
+        name: str = "hf_repo_files",
+        operations: tuple[str, ...] = READ_OPERATIONS,
+    ):
         self.api = HfApi(token=hf_token)
-        self.session = session
+        self.name = name
+        self.operations = operations
 
     async def execute(self, args: Dict[str, Any]) -> ToolResult:
         """Execute the specified operation."""
@@ -60,13 +77,11 @@ class HfRepoFilesTool:
                 "delete": self._delete,
             }
 
-            handler = handlers.get(operation)
-            if handler:
-                return await handler(args)
-            else:
-                return error_result(
-                    f"Unknown operation: {operation}. Valid: list, read, upload, delete"
-                )
+            if operation in self.operations:
+                return await handlers[operation](args)
+            return error_result(
+                f"Unknown operation: {operation}. Valid: {', '.join(self.operations)}"
+            )
 
         except RepositoryNotFoundError:
             return error_result(f"Repository not found: {args.get('repo_id')}")
@@ -77,16 +92,10 @@ class HfRepoFilesTool:
 
     def _help(self) -> ToolResult:
         """Show usage instructions."""
+        usage = "\n".join(f"- `{op}`: {USAGE[op]}" for op in self.operations)
         return {
-            "formatted": """**hf_repo_files** - File operations on HF repos
-
-**Operations:**
-- `list` - List files: `{"operation": "list", "repo_id": "gpt2"}`
-- `read` - Read file: `{"operation": "read", "repo_id": "gpt2", "path": "config.json"}`
-- `upload` - Upload: `{"operation": "upload", "repo_id": "my-model", "path": "README.md", "content": "..."}`
-- `delete` - Delete: `{"operation": "delete", "repo_id": "my-model", "patterns": ["*.tmp"]}`
-
-**Common params:** repo_id (required), repo_type (model/dataset/space), revision (default: main)""",
+            "formatted": f"**{self.name}** - File operations on HF repos\n\n**Operations:**\n{usage}\n\n"
+            "**Common params:** repo_id (required), repo_type (model/dataset/space), revision (default: main)",
             "totalResults": 1,
             "resultsShared": 1,
         }
@@ -256,30 +265,77 @@ class HfRepoFilesTool:
         return {"formatted": response, "totalResults": 1, "resultsShared": 1}
 
 
-# Tool specification
+REPO_PROPERTIES = {
+    "repo_id": {
+        "type": "string",
+        "description": "Repository ID (e.g., 'username/repo-name')",
+    },
+    "repo_type": {
+        "type": "string",
+        "enum": ["model", "dataset", "space"],
+        "description": "Repository type (default: model)",
+    },
+    "revision": {
+        "type": "string",
+        "description": "Branch/tag/commit (default: main)",
+    },
+}
+
 HF_REPO_FILES_TOOL_SPEC = {
     "name": "hf_repo_files",
     "description": (
-        "Read and write files in HF repos (models/datasets/spaces).\n\n"
+        "List and read files in HF repos (models/datasets/spaces).\n\n"
         "## Operations\n"
         "- **list**: List files with sizes and structure\n"
-        "- **read**: Read file content (text files only)\n"
+        "- **read**: Read file content (text files only)\n\n"
+        "## Use when\n"
+        "- Need to see what files exist in a repo\n"
+        "- Want to read config.json, README.md, or other text files\n\n"
+        "## Examples\n"
+        '{"operation": "list", "repo_id": "meta-llama/Llama-2-7b"}\n'
+        '{"operation": "read", "repo_id": "gpt2", "path": "config.json"}\n\n'
+        "## Notes\n"
+        "- For binary files (safetensors, bin), use list to see them but can't read content\n"
+        "- To change files in a repo, use hf_repo_write\n"
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "operation": {
+                "type": "string",
+                "enum": list(READ_OPERATIONS),
+                "description": "Operation: list, read",
+            },
+            **REPO_PROPERTIES,
+            "path": {
+                "type": "string",
+                "description": "Folder to list or file to read",
+            },
+            "max_chars": {
+                "type": "integer",
+                "description": "Maximum characters returned by read (default: 50000)",
+            },
+        },
+        "required": ["operation"],
+    },
+}
+
+HF_REPO_WRITE_TOOL_SPEC = {
+    "name": "hf_repo_write",
+    "description": (
+        "Upload or delete files in HF repos (models/datasets/spaces). "
+        "Changes the user's repos, so the user is asked to approve each call.\n\n"
+        "## Operations\n"
         "- **upload**: Upload content to repo (can create PR)\n"
         "- **delete**: Delete files/folders (supports wildcards like *.tmp)\n\n"
         "## Use when\n"
-        "- Need to see what files exist in a repo\n"
-        "- Want to read config.json, README.md, or other text files\n"
         "- Uploading training scripts, configs, or results to a repo\n"
         "- Cleaning up temporary files from a repo\n\n"
         "## Examples\n"
-        '{"operation": "list", "repo_id": "meta-llama/Llama-2-7b"}\n'
-        '{"operation": "read", "repo_id": "gpt2", "path": "config.json"}\n'
         '{"operation": "upload", "repo_id": "my-model", "path": "README.md", "content": "# My Model"}\n'
         '{"operation": "upload", "repo_id": "org/model", "path": "fix.py", "content": "...", "create_pr": true}\n'
         '{"operation": "delete", "repo_id": "my-model", "patterns": ["*.tmp", "logs/"]}\n\n'
         "## Notes\n"
-        "- For binary files (safetensors, bin), use list to see them but can't read content\n"
-        "- upload/delete require approval (can overwrite/destroy data)\n"
         "- Use create_pr=true to propose changes instead of direct commit\n"
     ),
     "parameters": {
@@ -287,33 +343,17 @@ HF_REPO_FILES_TOOL_SPEC = {
         "properties": {
             "operation": {
                 "type": "string",
-                "enum": ["list", "read", "upload", "delete"],
-                "description": "Operation: list, read, upload, delete",
+                "enum": list(WRITE_OPERATIONS),
+                "description": "Operation: upload, delete",
             },
-            "repo_id": {
-                "type": "string",
-                "description": "Repository ID (e.g., 'username/repo-name')",
-            },
-            "repo_type": {
-                "type": "string",
-                "enum": ["model", "dataset", "space"],
-                "description": "Repository type (default: model)",
-            },
-            "revision": {
-                "type": "string",
-                "description": "Branch/tag/commit (default: main)",
-            },
+            **REPO_PROPERTIES,
             "path": {
                 "type": "string",
-                "description": "File path for read/upload",
+                "description": "File path for upload",
             },
             "content": {
                 "type": "string",
                 "description": "File content for upload",
-            },
-            "max_chars": {
-                "type": "integer",
-                "description": "Maximum characters returned by read (default: 50000)",
             },
             "patterns": {
                 "type": "array",
@@ -334,14 +374,20 @@ HF_REPO_FILES_TOOL_SPEC = {
 }
 
 
-async def hf_repo_files_handler(
-    arguments: Dict[str, Any], session=None
-) -> tuple[str, bool]:
-    """Handler for agent tool router."""
+async def _run(arguments: Dict[str, Any], session, name: str, operations: tuple[str, ...]):
     try:
         hf_token = session.hf_token if session else None
-        tool = HfRepoFilesTool(hf_token=hf_token, session=session)
-        result = await tool.execute(arguments)
-        return handler_output(result)
+        tool = HfRepoFilesTool(hf_token=hf_token, name=name, operations=operations)
+        return handler_output(await tool.execute(arguments))
     except Exception as e:
         return f"Error: {str(e)}", False
+
+
+async def hf_repo_files_handler(arguments: Dict[str, Any], session=None) -> tuple[str, bool]:
+    """Handler for the read-only hf_repo_files tool."""
+    return await _run(arguments, session, "hf_repo_files", READ_OPERATIONS)
+
+
+async def hf_repo_write_handler(arguments: Dict[str, Any], session=None) -> tuple[str, bool]:
+    """Handler for the hf_repo_write tool."""
+    return await _run(arguments, session, "hf_repo_write", WRITE_OPERATIONS)

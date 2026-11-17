@@ -30,7 +30,9 @@ from ml_intern_mcp.tools.github_read_file import (
 )
 from ml_intern_mcp.tools.hf_repo_files_tool import (
     HF_REPO_FILES_TOOL_SPEC,
+    HF_REPO_WRITE_TOOL_SPEC,
     hf_repo_files_handler,
+    hf_repo_write_handler,
 )
 from ml_intern_mcp.tools.papers_tool import HF_PAPERS_TOOL_SPEC, hf_papers_handler
 
@@ -70,6 +72,7 @@ def research_tools(
             cache,
         ),
         spec_tool(HF_REPO_FILES_TOOL_SPEC, partial(hf_repo_files_handler, session=session)),
+        spec_tool(HF_REPO_WRITE_TOOL_SPEC, partial(hf_repo_write_handler, session=session)),
         spec_tool(GITHUB_FIND_EXAMPLES_TOOL_SPEC, github_find_examples_handler, cache),
         spec_tool(GITHUB_LIST_REPOS_TOOL_SPEC, github_list_repos_handler, cache),
         spec_tool(GITHUB_READ_FILE_TOOL_SPEC, github_read_file_handler, cache),
