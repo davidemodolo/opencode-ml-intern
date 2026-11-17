@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from ml_intern_mcp.compute.local import LocalBackend
-from ml_intern_mcp.compute.models import Hardware, Job, JobSpec, JobState
+from ml_intern_mcp.compute.models import Gpu, Hardware, Job, JobSpec, JobState
 from ml_intern_mcp.compute.store import JobStore
 
 MAX_TIMEOUT_MINUTES = 24 * 60
@@ -76,23 +76,27 @@ class ComputeService:
 
     def reconcile(self) -> None:
         with self._locked():
-            for job in self.store.all():
+            jobs = self.store.all()
+            for job in jobs:
                 if job.state != JobState.RUNNING:
                     continue
                 self._backend(job.spec.backend).refresh(job)
                 if job.state.finished:
                     self.store.save(job)
                     self.store.write_event(job)
-            self._schedule()
+            self._schedule(jobs)
 
-    def _schedule(self) -> None:
-        jobs = self.store.all()
+    def _schedule(self, jobs: list[Job] | None = None) -> None:
+        jobs = self.store.all() if jobs is None else jobs
         busy = {self._slot(j.gpu) for j in jobs if j.state == JobState.RUNNING}
+        gpus_by_backend: dict[str, list[Gpu]] = {}
         for job in jobs:
             if job.state != JobState.QUEUED:
                 continue
             backend = self._backend(job.spec.backend)
-            gpu = self._pick_gpu(backend, job.spec, busy)
+            if backend.name not in gpus_by_backend:
+                gpus_by_backend[backend.name] = backend.hardware().gpus
+            gpu = self._pick_gpu(gpus_by_backend[backend.name], job.spec, busy)
             if gpu is False:
                 continue
             try:
@@ -106,8 +110,8 @@ class ComputeService:
             busy.add(self._slot(gpu))
             self.store.save(job)
 
-    def _pick_gpu(self, backend: LocalBackend, spec: JobSpec, busy: set[int]) -> int | None | bool:
-        gpus = backend.hardware().gpus
+    @staticmethod
+    def _pick_gpu(gpus: list[Gpu], spec: JobSpec, busy: set[int]) -> int | None | bool:
         if not gpus:
             return None if CPU_SLOT not in busy else False
         candidates = [g for g in gpus if spec.gpu is None or g.index == spec.gpu]
