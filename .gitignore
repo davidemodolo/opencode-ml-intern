@@ -7,3 +7,5 @@ __pycache__/
 .ruff_cache/
 *.log
 e2e/.opencode/
+spikes/out/
+**/.opencode/goals/
