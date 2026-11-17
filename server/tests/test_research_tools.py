@@ -6,7 +6,7 @@ import requests
 
 from ml_intern_mcp.tools import github_list_repos
 from ml_intern_mcp.tools.github_find_examples import github_find_examples_handler
-from ml_intern_mcp.tools.github_read_file import github_read_file_handler
+from ml_intern_mcp.tools.github_read_file import github_read_file_handler, read_file
 from ml_intern_mcp.tools.hf_repo_files_tool import HfRepoFilesTool
 
 
@@ -81,3 +81,15 @@ async def test_hf_repo_listing_pages_off_the_event_loop():
     start = time.monotonic()
     await asyncio.gather(*(tool.execute({"operation": "list", "repo_id": "r"}) for _ in range(3)))
     assert time.monotonic() - start < 1.0
+
+
+def test_read_file_escapes_the_path(monkeypatch, github_token):
+    urls = []
+
+    def fake_get(url, **kwargs):
+        urls.append(url)
+        return FakeResponse({}, status_code=404)
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    read_file("o/r", "notebooks/Fine-tune #2?.ipynb")
+    assert urls == ["https://api.github.com/repos/o/r/contents/notebooks/Fine-tune%20%232%3F.ipynb"]

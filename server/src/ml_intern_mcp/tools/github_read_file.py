@@ -8,6 +8,7 @@ import asyncio
 import base64
 import json
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 import nbformat
 import requests
@@ -103,7 +104,7 @@ def read_file(
     headers = github_headers(token)
 
     # Fetch file contents
-    url = f"https://api.github.com/repos/{owner}/{repo_name}/contents/{path}"
+    url = f"https://api.github.com/repos/{owner}/{repo_name}/contents/{quote(path, safe='/')}"
     params = {}
     if ref and ref != "HEAD":
         params["ref"] = ref
