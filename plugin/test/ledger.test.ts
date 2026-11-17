@@ -19,6 +19,21 @@ describe("JobLedger", () => {
     expect((await ledger.get("j1"))?.state).toBe("succeeded")
     expect(await ledger.forSession("a")).toHaveLength(125)
   })
+
+  it("reads only the records of the requested session", async () => {
+    const store = new MemoryStore()
+    const ledger = new JobLedger(store)
+    for (let i = 0; i < 10; i++) await ledger.add(job({ jobId: `j${i}`, sessionID: i ? "other" : "mine" }))
+    const scanned: string[] = []
+    const scan = store.scan.bind(store)
+    store.scan = async (options) => {
+      const page = await scan(options)
+      scanned.push(...page.entries.map((e) => e.key))
+      return page
+    }
+    expect((await ledger.forSession("mine")).map((r) => r.jobId)).toEqual(["j0"])
+    expect(scanned).toHaveLength(1)
+  })
 })
 
 describe("gateReason", () => {
