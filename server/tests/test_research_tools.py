@@ -8,7 +8,13 @@ import requests
 from huggingface_hub.hf_api import RepoFile, RepoFolder
 
 from ml_intern_mcp.research import HubSession
-from ml_intern_mcp.tools import dataset_tools, docs_tools, github_list_repos, papers_tool
+from ml_intern_mcp.tools import (
+    dataset_tools,
+    docs_tools,
+    github_list_repos,
+    hf_repo_files_tool,
+    papers_tool,
+)
 from ml_intern_mcp.tools.github_find_examples import github_find_examples_handler
 from ml_intern_mcp.tools.github_read_file import github_read_file_handler, read_file
 from ml_intern_mcp.tools.hf_repo_files_tool import HfRepoFilesTool
@@ -209,3 +215,38 @@ async def test_hf_repo_listing_shows_empty_files_as_files():
     lines = result["formatted"].splitlines()
     assert "pkg/__init__.py (0.0B)" in lines and "pkg/" in lines
     assert "(1 files," in lines[0]
+
+
+def hub_file_server(monkeypatch, body, total):
+    requested = []
+
+    def handler(request):
+        requested.append(request)
+        end = min(len(body), int(request.headers["range"].split("-")[1]) + 1)
+        headers = {"content-range": f"bytes 0-{end - 1}/{total}"}
+        return httpx.Response(206, content=body[:end], headers=headers)
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        hf_repo_files_tool.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs),
+    )
+    return requested
+
+
+async def test_hf_repo_read_fetches_only_the_start_of_a_binary(monkeypatch):
+    requested = hub_file_server(monkeypatch, b"\x00" * 300_000, 5 * 1024**3)
+    tool = HfRepoFilesTool()
+    result = await tool.execute({"operation": "read", "repo_id": "r", "path": "model.safetensors"})
+    assert result["formatted"] == "Binary file (5.0GB)"
+    assert requested[0].headers["range"].startswith("bytes=0-")
+
+
+async def test_hf_repo_read_truncates_text_to_max_chars(monkeypatch):
+    hub_file_server(monkeypatch, b"x" * 1000, 1000)
+    tool = HfRepoFilesTool()
+    args = {"operation": "read", "repo_id": "r", "path": "a.txt", "max_chars": 10}
+    result = await tool.execute(args)
+    assert "(truncated)" in result["formatted"] and "x" * 11 not in result["formatted"]
+    assert "max_chars" in hf_repo_files_tool.HF_REPO_FILES_TOOL_SPEC["parameters"]["properties"]
