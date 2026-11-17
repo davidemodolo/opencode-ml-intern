@@ -4,11 +4,17 @@ GitHub List Repositories Tool - List and sort repositories for any user or organ
 Efficiently discover repositories with flexible sorting options.
 """
 
-import os
 from typing import Any, Dict, Literal, Optional
 
 import requests
 
+from ml_intern_mcp.tools._github import (
+    github_error,
+    github_headers,
+    github_token,
+    missing_token,
+    short_description,
+)
 from ml_intern_mcp.tools.types import ToolResult, error_result, handler_output
 
 
@@ -32,20 +38,16 @@ def list_repos(
     Returns:
         ToolResult with repository information
     """
-    token = os.environ.get("GITHUB_TOKEN")
+    token = github_token()
     if not token:
-        return error_result("Error: GITHUB_TOKEN environment variable is required")
+        return missing_token()
 
     if owner_type == "org":
         url = f"https://api.github.com/orgs/{owner}/repos"
     else:
         url = f"https://api.github.com/users/{owner}/repos"
 
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "Authorization": f"Bearer {token}",
-    }
+    headers = github_headers(token)
 
     all_repos = []
     page = 1
@@ -88,14 +90,7 @@ def list_repos(
                 return error_result(f"GitHub API rate limit or permission error: {error_data.get('message', 'Unknown error')}")
 
             if response.status_code != 200:
-                error_msg = f"GitHub API error (status {response.status_code})"
-                try:
-                    error_data = response.json()
-                    if "message" in error_data:
-                        error_msg += f": {error_data['message']}"
-                except Exception:
-                    pass
-                return error_result(error_msg)
+                return error_result(github_error(response))
 
             items = response.json()
 
@@ -157,11 +152,7 @@ def list_repos(
             f"   ⭐ {repo['stars']:,} stars | 🍴 {repo['forks']:,} forks | Language: {repo['language'] or 'N/A'}"
         )
         if repo["description"]:
-            desc = (
-                repo["description"][:100] + "..."
-                if len(repo["description"]) > 100
-                else repo["description"]
-            )
+            desc = short_description(repo["description"])
             lines.append(f"   {desc}")
         lines.append(f"   URL: {repo['html_url']}")
         if repo["topics"]:

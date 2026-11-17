@@ -4,12 +4,17 @@ GitHub Find Examples Tool - Discover examples, tutorials, and guides for any lib
 Lists all files in a repository and performs deterministic keyword search.
 """
 
-import os
 from typing import Any, Dict, List
 
 import requests
 from thefuzz import fuzz
 
+from ml_intern_mcp.tools._github import (
+    github_headers,
+    github_token,
+    missing_token,
+    short_description,
+)
 from ml_intern_mcp.tools.types import ToolResult, error_result, handler_output
 
 # In order of priority (lower index = higher priority for sorting)
@@ -55,11 +60,7 @@ EXAMPLE_PATTERNS = [
 
 def _get_repo_tree(org: str, repo: str, token: str) -> tuple[List[Dict[str, Any]], str]:
     """Get all files in a repository recursively. Returns (files, error_message)"""
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "Authorization": f"Bearer {token}",
-    }
+    headers = github_headers(token)
 
     full_repo = f"{org}/{repo}"
 
@@ -111,11 +112,7 @@ def _get_repo_tree(org: str, repo: str, token: str) -> tuple[List[Dict[str, Any]
 
 def _search_similar_repos(org: str, repo: str, token: str) -> List[Dict[str, Any]]:
     """Search for similar repository names in the organization"""
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "Authorization": f"Bearer {token}",
-    }
+    headers = github_headers(token)
 
     # Search for repos in the org with similar name
     query = f"org:{org} {repo}"
@@ -226,11 +223,7 @@ def _handle_repo_tree_errors(
         for i, r in enumerate(similar_repos, 1):
             lines.append(f"{i}. **{r['full_name']}** (⭐ {r['stars']:,} stars)")
             if r["description"]:
-                desc = (
-                    r["description"][:100] + "..."
-                    if len(r["description"]) > 100
-                    else r["description"]
-                )
+                desc = short_description(r["description"])
                 lines.append(f"   {desc}")
             lines.append(f"   {r['url']}\n")
 
@@ -274,9 +267,9 @@ def find_examples(
     Returns:
         ToolResult with matching files, or similar repos if repo not found
     """
-    token = os.environ.get("GITHUB_TOKEN")
+    token = github_token()
     if not token:
-        return error_result("Error: GITHUB_TOKEN environment variable is required")
+        return missing_token()
 
     if not repo:
         return error_result("Error: repo parameter is required")

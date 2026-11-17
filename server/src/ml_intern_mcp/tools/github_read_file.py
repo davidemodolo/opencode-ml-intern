@@ -6,7 +6,6 @@ Fetch exact file contents with metadata, supporting line ranges for efficient re
 
 import base64
 import json
-import os
 from typing import Any, Dict, Optional
 
 import nbformat
@@ -14,6 +13,12 @@ import requests
 from nbconvert import MarkdownExporter
 from nbconvert.preprocessors import ClearOutputPreprocessor, TagRemovePreprocessor
 
+from ml_intern_mcp.tools._github import (
+    github_error,
+    github_headers,
+    github_token,
+    missing_token,
+)
 from ml_intern_mcp.tools.types import ToolResult, error_result, handler_output
 
 
@@ -84,9 +89,9 @@ def read_file(
     Returns:
         ToolResult with file contents and metadata
     """
-    token = os.environ.get("GITHUB_TOKEN")
+    token = github_token()
     if not token:
-        return error_result("Error: GITHUB_TOKEN environment variable is required")
+        return missing_token()
 
     # Parse repo
     if "/" not in repo:
@@ -94,11 +99,7 @@ def read_file(
 
     owner, repo_name = repo.split("/", 1)
 
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "Authorization": f"Bearer {token}",
-    }
+    headers = github_headers(token)
 
     # Fetch file contents
     url = f"https://api.github.com/repos/{owner}/{repo_name}/contents/{path}"
@@ -113,14 +114,7 @@ def read_file(
             return error_result(f"File not found: {path} in {repo} (ref: {ref})")
 
         if response.status_code != 200:
-            error_msg = f"GitHub API error (status {response.status_code})"
-            try:
-                error_data = response.json()
-                if "message" in error_data:
-                    error_msg += f": {error_data['message']}"
-            except Exception:
-                pass
-            return error_result(error_msg)
+            return error_result(github_error(response))
 
         data = response.json()
 
@@ -135,11 +129,7 @@ def read_file(
             content = base64.b64decode(content_b64).decode("utf-8", errors="replace")
         else:
             # For large files, fetch raw content
-            raw_headers = {
-                "Accept": "application/vnd.github.raw",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "Authorization": f"Bearer {token}",
-            }
+            raw_headers = github_headers(token, accept="application/vnd.github.raw")
             raw_response = requests.get(
                 url, headers=raw_headers, params=params, timeout=30
             )
