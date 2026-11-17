@@ -41,6 +41,8 @@ S2_API = "https://api.semanticscholar.org"
 S2_API_KEY = os.environ.get("S2_API_KEY")
 S2_HEADERS: dict[str, str] = {"x-api-key": S2_API_KEY} if S2_API_KEY else {}
 S2_TIMEOUT = 12
+S2_RETRY_SECONDS = (2, 5)
+S2_MAX_RETRY_AFTER = 10
 _s2_last_request: float = 0.0
 
 # Shared response cache (survives across sessions, keyed by (path, params_tuple))
@@ -57,6 +59,13 @@ def _s2_cache_key(path: str, params: dict | None) -> str:
     """Build a hashable cache key from path + sorted params."""
     p = tuple(sorted((params or {}).items()))
     return f"{path}:{p}"
+
+
+def _s2_retry_delay(response: httpx.Response, attempt: int) -> float:
+    retry_after = response.headers.get("retry-after", "")
+    if retry_after.isdigit():
+        return min(int(retry_after), S2_MAX_RETRY_AFTER)
+    return S2_RETRY_SECONDS[attempt]
 
 
 async def _s2_request(
@@ -84,7 +93,7 @@ async def _s2_request(
             resp = await client.request(method, url, **kwargs)
             if resp.status_code == 429:
                 if attempt < 2:
-                    await asyncio.sleep(60)
+                    await asyncio.sleep(_s2_retry_delay(resp, attempt))
                     continue
                 return None
             if resp.status_code >= 500:
