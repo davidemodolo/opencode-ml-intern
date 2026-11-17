@@ -13,6 +13,7 @@ dependencies = [
     "mcp==2.3.0",
     "nbconvert==7.17.2",
     "nbformat==5.11.1",
+    "nvidia-ml-py==13.615.71",
     "requests==2.34.2",
     "thefuzz==0.22.1",
     "whoosh==2.7.4",
