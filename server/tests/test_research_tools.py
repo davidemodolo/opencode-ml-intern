@@ -7,7 +7,7 @@ import pytest
 import requests
 
 from ml_intern_mcp.research import HubSession
-from ml_intern_mcp.tools import dataset_tools, docs_tools, github_list_repos
+from ml_intern_mcp.tools import dataset_tools, docs_tools, github_list_repos, papers_tool
 from ml_intern_mcp.tools.github_find_examples import github_find_examples_handler
 from ml_intern_mcp.tools.github_read_file import github_read_file_handler, read_file
 from ml_intern_mcp.tools.hf_repo_files_tool import HfRepoFilesTool
@@ -166,3 +166,8 @@ def test_find_hf_api_curl_examples_run_in_a_shell():
     ).stdout.splitlines()
     assert "https://huggingface.co/api/models/<repo_id>?search=value" in output
     assert "Authorization: Bearer abc" in output
+
+
+async def test_hf_papers_accepts_a_null_limit():
+    text, ok = await papers_tool.hf_papers_handler({"operation": "paper_details", "limit": None})
+    assert not ok and "arxiv_id" in text

@@ -1305,7 +1305,7 @@ async def hf_papers_handler(arguments: dict[str, Any]) -> tuple[str, bool]:
         valid = ", ".join(_OPERATIONS.keys())
         return f"Unknown operation: '{operation}'. Valid: {valid}", False
 
-    limit = min(arguments.get("limit", DEFAULT_LIMIT), MAX_LIMIT)
+    limit = min(arguments.get("limit") or DEFAULT_LIMIT, MAX_LIMIT)
 
     try:
         result = await handler(arguments, limit)
