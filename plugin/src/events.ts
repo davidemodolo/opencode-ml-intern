@@ -1,5 +1,5 @@
 import { watch, type FSWatcher } from "node:fs"
-import { mkdir, readdir, readFile } from "node:fs/promises"
+import { mkdir, open, readdir, readFile } from "node:fs/promises"
 import { join } from "node:path"
 import type { JobLedger, JobRecord } from "./ledger.js"
 
@@ -73,12 +73,23 @@ export class EventWatcher {
     await Promise.all(files.map((file) => this.process(file.slice(0, -".json".length))))
   }
 
+  /** Several plugin instances watch the same folder: the exclusive create lets one of them deliver. */
+  private async claim(jobId: string): Promise<boolean> {
+    try {
+      await (await open(join(this.eventsDir, jobId + ".delivered"), "wx")).close()
+      return true
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") return false
+      throw error
+    }
+  }
+
   private async process(jobId: string): Promise<void> {
     if (this.inFlight.has(jobId)) return
     this.inFlight.add(jobId)
     try {
       const record = await this.ledger.get(jobId)
-      if (!record || record.delivered) return
+      if (!record || record.delivered || !(await this.claim(jobId))) return
       const event = JSON.parse(await readFile(join(this.eventsDir, jobId + ".json"), "utf8")) as JobEvent
       const updated = await this.ledger.update(jobId, {
         state: event.state,
