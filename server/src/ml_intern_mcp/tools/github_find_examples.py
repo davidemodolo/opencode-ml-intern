@@ -252,8 +252,8 @@ def find_examples(
     keyword: str = "",
     repo: str = "",
     org: str = "huggingface",
-    max_results: int = 10,
-    min_score: int = 80,
+    max_results: int = 50,
+    min_score: int = 60,
 ) -> ToolResult:
     """
     Find example files in a repository using fuzzy matching.
@@ -330,13 +330,6 @@ def find_examples(
                     "path_depth": path_depth,
                 }
             )
-
-        if not scored_files:
-            return {
-                "formatted": f"No example files found in {org}/{repo}.",
-                "totalResults": 0,
-                "resultsShared": 0,
-            }
 
         # Sort by: 1) files in examples/ dir first, 2) pattern priority (scripts > datasets > etc), 3) path depth, 4) path name
         scored_files.sort(
