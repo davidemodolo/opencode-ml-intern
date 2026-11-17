@@ -20,7 +20,7 @@ The plugin registers the `ml-intern` MCP server (`uvx ml-intern-mcp==0.1.0`) unl
 - Skills: `ml-job-script`, `lora-sft`, `qlora`, `preference-tuning`.
 - Compute gate: `submit_job` asks for approval and each session has a limit of active jobs and GPU hours.
 - Job notifications: when a job ends, the session that submitted it receives its state and last log lines and resumes.
-- Repetition guard: repeated identical tool calls and repeating call cycles are blocked, and the agent receives a corrective message.
+- Repetition guard: repeated identical tool calls and repeating call cycles are blocked, and the agent receives a corrective message. Polling `job_status` on a running job is blocked after `loopThreshold` calls, since completion is notified.
 
 ## Options
 

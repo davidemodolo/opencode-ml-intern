@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { configureAgents, ML_INTERN_AGENT, ML_RESEARCH_AGENT } from "../src/agents.js"
-import { jobIdFrom } from "../src/index.js"
+import { jobIdFrom } from "../src/results.js"
 import { registerServer } from "../src/mcp.js"
 import { DEFAULT_SERVER_COMMAND, resolveOptions } from "../src/options.js"
 import { loadSkills } from "../src/skills.js"

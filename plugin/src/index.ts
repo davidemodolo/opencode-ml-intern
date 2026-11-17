@@ -6,8 +6,10 @@ import { hfUser } from "./hf.js"
 import { registerServer } from "./mcp.js"
 import { gateReason, JobLedger } from "./ledger.js"
 import { LoopGuard } from "./loop-guard.js"
+import { PollGuard } from "./poll-guard.js"
 import { resolveOptions } from "./options.js"
 import { formatPlan, PLAN_TOOL_DESCRIPTION, PLAN_TOOL_INPUT, validatePlan, type PlanItem } from "./plan.js"
+import { jobIdFrom } from "./results.js"
 import { loadSkills } from "./skills.js"
 
 const GUARDED_AGENTS = new Set([ML_INTERN_AGENT, ML_RESEARCH_AGENT])
@@ -16,11 +18,6 @@ const COMPACTION_NOTE =
   "When summarizing this ML Intern session, keep the current plan, every job ID with its state, " +
   "the datasets and models in use and the results obtained so far."
 
-export function jobIdFrom(result: unknown): string | undefined {
-  const text = typeof result === "string" ? result : JSON.stringify(result)
-  return /job_id\\*"\s*:\s*\\*"([A-Za-z0-9_-]+)/.exec(text ?? "")?.[1]
-}
-
 const warn = (error: unknown) => console.warn("[opencode-ml-intern]", error)
 
 export default Plugin.define({
@@ -28,8 +25,10 @@ export default Plugin.define({
   async setup(ctx) {
     const options = resolveOptions(ctx.options ?? {}, process.env)
     const submitTool = `${options.mcpServer}_submit_job`
+    const statusTool = `${options.mcpServer}_job_status`
     const ledger = new JobLedger(ctx.storage)
     const guard = new LoopGuard(options.loopThreshold)
+    const polls = new PollGuard(options.loopThreshold)
     const skills = await loadSkills()
     let user: string | undefined
     void hfUser(process.env).then((name) => (user = name))
@@ -72,7 +71,9 @@ export default Plugin.define({
     await ctx.tool.hook("execute.before", async (event) => {
       if (event.tool === CODE_MODE_TOOL) return
       if (GUARDED_AGENTS.has(event.agent)) {
-        const reason = guard.check(event.sessionID, event.tool, event.input)
+        const reason =
+          guard.check(event.sessionID, event.tool, event.input) ??
+          (event.tool === statusTool ? polls.check(event.sessionID, event.input) : undefined)
         if (reason) throw new Error(reason)
       }
       if (event.tool === submitTool) {
@@ -98,6 +99,7 @@ export default Plugin.define({
         }
       }
       if (!GUARDED_AGENTS.has(event.agent)) return
+      if (event.tool === statusTool && event.status === "completed") polls.record(event.sessionID, event.input, event.result)
       const outcome = event.status === "completed" ? event.result : event.error
       const correction = guard.record(event.sessionID, event.tool, event.input, outcome)
       if (correction) await notify(event.sessionID, correction, false)
@@ -119,7 +121,10 @@ export default Plugin.define({
     const watcher = new EventWatcher(
       options.dataDir,
       ledger,
-      (record, jobEvent) => notify(record.sessionID, formatEvent(jobEvent), true),
+      (record, jobEvent) => {
+        polls.reset(record.sessionID, record.jobId)
+        return notify(record.sessionID, formatEvent(jobEvent), true)
+      },
       options.eventPollMs,
       warn,
     )
