@@ -1,12 +1,13 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugins": ["../plugin"],
-  "mcp": {
-    "servers": {
-      "ml-intern": {
-        "type": "local",
-        "command": ["uv", "run", "--project", "../server", "ml-intern-mcp"]
+  "model": "opencode/deepseek-v4.1-flash-free",
+  "plugins": [
+    {
+      "package": "../plugin",
+      "options": {
+        "autoApprove": true,
+        "serverCommand": ["uv", "run", "--project", "../server", "ml-intern-mcp"]
       }
     }
-  }
+  ]
 }

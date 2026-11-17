@@ -10,7 +10,11 @@ export interface Options {
   readonly autonomous: boolean
   readonly loopThreshold: number
   readonly eventPollMs: number
+  readonly serverCommand: readonly string[]
 }
+
+export const SERVER_PACKAGE = "ml-intern-mcp==0.1.0"
+export const DEFAULT_SERVER_COMMAND: readonly string[] = ["uvx", SERVER_PACKAGE]
 
 type Env = Readonly<Record<string, string | undefined>>
 
@@ -33,5 +37,9 @@ export function resolveOptions(raw: Readonly<Record<string, unknown>>, env: Env,
     autonomous: raw.autonomous === true,
     loopThreshold: number(raw.loopThreshold, 3),
     eventPollMs: number(raw.eventPollMs, 3000),
+    serverCommand:
+      Array.isArray(raw.serverCommand) && raw.serverCommand.every((part) => typeof part === "string")
+        ? raw.serverCommand
+        : DEFAULT_SERVER_COMMAND,
   }
 }

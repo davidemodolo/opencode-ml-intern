@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { configureAgents, ML_INTERN_AGENT, ML_RESEARCH_AGENT } from "../src/agents.js"
 import { jobIdFrom } from "../src/index.js"
-import { resolveOptions } from "../src/options.js"
+import { registerServer } from "../src/mcp.js"
+import { DEFAULT_SERVER_COMMAND, resolveOptions } from "../src/options.js"
 import { loadSkills } from "../src/skills.js"
 
 describe("options", () => {
@@ -27,6 +28,21 @@ describe("agents", () => {
     expect(research.permissions[0]).toEqual({ action: "*", resource: "*", effect: "deny" })
     expect(research.permissions).toContainEqual({ action: "ml-intern_hf_papers", resource: "*", effect: "allow" })
     expect(research.permissions.some((p: any) => p.action.endsWith("submit_job"))).toBe(false)
+  })
+})
+
+describe("mcp server registration", () => {
+  it("adds the server with the shared data dir unless one is configured", () => {
+    const servers = new Map<string, any>()
+    const editor = { get: (name: string) => servers.get(name), set: (name: string, config: any) => void servers.set(name, config) }
+    const options = resolveOptions({}, { ML_INTERN_DATA_DIR: "/d" })
+    expect(registerServer(editor, options)).toBe(true)
+    expect(servers.get("ml-intern")).toEqual({
+      type: "local",
+      command: [...DEFAULT_SERVER_COMMAND],
+      environment: { ML_INTERN_DATA_DIR: "/d" },
+    })
+    expect(registerServer(editor, options)).toBe(false)
   })
 })
 

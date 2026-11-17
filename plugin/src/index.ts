@@ -3,6 +3,7 @@ import { configureAgents, ML_INTERN_AGENT, ML_RESEARCH_AGENT } from "./agents.js
 import { sessionContext } from "./context.js"
 import { EventWatcher, formatEvent } from "./events.js"
 import { hfUser } from "./hf.js"
+import { registerServer } from "./mcp.js"
 import { gateReason, JobLedger } from "./ledger.js"
 import { LoopGuard } from "./loop-guard.js"
 import { resolveOptions } from "./options.js"
@@ -38,6 +39,7 @@ export default Plugin.define({
     const notify = (sessionID: string, text: string, resume: boolean) =>
       ctx.session.synthetic({ sessionID: sessionID as any, text, resume }).then(() => undefined, warn)
 
+    await ctx.mcp.transform((editor) => void registerServer(editor, options))
     await ctx.agent.transform((editor) => configureAgents(editor, options))
 
     await ctx.skill.transform((editor) => {
