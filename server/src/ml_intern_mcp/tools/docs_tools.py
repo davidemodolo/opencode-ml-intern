@@ -5,6 +5,7 @@ Documentation search tools for exploring HuggingFace and Gradio documentation.
 import asyncio
 import json
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from bs4 import BeautifulSoup
@@ -386,6 +387,9 @@ async def hf_docs_fetch_handler(
     url = arguments.get("url", "")
     if not url:
         return "Error: No URL provided", False
+    parts = urlsplit(url)
+    if parts.scheme != "https" or parts.hostname != "huggingface.co":
+        return f"Error: fetch_hf_docs only reads https://huggingface.co pages, got {url}", False
 
     hf_token = session.hf_token if session else None
     if not hf_token:
