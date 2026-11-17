@@ -5,7 +5,8 @@ import httpx
 import pytest
 import requests
 
-from ml_intern_mcp.tools import dataset_tools, github_list_repos
+from ml_intern_mcp.research import HubSession
+from ml_intern_mcp.tools import dataset_tools, docs_tools, github_list_repos
 from ml_intern_mcp.tools.github_find_examples import github_find_examples_handler
 from ml_intern_mcp.tools.github_read_file import github_read_file_handler, read_file
 from ml_intern_mcp.tools.hf_repo_files_tool import HfRepoFilesTool
@@ -96,7 +97,7 @@ def test_read_file_escapes_the_path(monkeypatch, github_token):
     assert urls == ["https://api.github.com/repos/o/r/contents/notebooks/Fine-tune%20%232%3F.ipynb"]
 
 
-def mock_datasets_server(monkeypatch, respond):
+def mock_httpx(monkeypatch, module, respond):
     requested = []
 
     def handler(request):
@@ -109,12 +110,14 @@ def mock_datasets_server(monkeypatch, respond):
     def client(**kwargs):
         return real_client(transport=httpx.MockTransport(handler), **kwargs)
 
-    monkeypatch.setattr(dataset_tools.httpx, "AsyncClient", client)
+    monkeypatch.setattr(module.httpx, "AsyncClient", client)
     return requested
 
 
 async def test_inspect_dataset_reports_server_errors(monkeypatch):
-    mock_datasets_server(monkeypatch, lambda path: (404, {"error": "The dataset does not exist."}))
+    mock_httpx(
+        monkeypatch, dataset_tools, lambda path: (404, {"error": "The dataset does not exist."})
+    )
     text, ok = await dataset_tools.hf_inspect_dataset_handler({"dataset": "o/missing"})
     assert not ok and "The dataset does not exist." in text
 
@@ -126,8 +129,21 @@ async def test_inspect_dataset_takes_the_split_of_the_requested_config(monkeypat
             {"dataset": "d", "config": "b", "split": "test"},
         ]
     }
-    requested = mock_datasets_server(
-        monkeypatch, lambda path: (200, splits) if path == "/splits" else (200, {})
+    requested = mock_httpx(
+        monkeypatch, dataset_tools, lambda path: (200, splits) if path == "/splits" else (200, {})
     )
     await dataset_tools.hf_inspect_dataset_handler({"dataset": "d", "config": "b"})
     assert ("/first-rows", {"dataset": "d", "config": "b", "split": "test"}) in requested
+
+
+async def test_fetch_hf_docs_only_sends_the_token_to_hugging_face(monkeypatch):
+    requested = mock_httpx(monkeypatch, docs_tools, lambda path: (200, {}))
+    session = HubSession(hf_token="secret")
+    for url in ["https://attacker.example/docs/x", "http://huggingface.co/docs/x"]:
+        text, ok = await docs_tools.hf_docs_fetch_handler({"url": url}, session=session)
+        assert not ok and "huggingface.co" in text
+    assert requested == []
+    _, ok = await docs_tools.hf_docs_fetch_handler(
+        {"url": "https://huggingface.co/docs/trl/sft_trainer"}, session=session
+    )
+    assert ok and requested == [("/docs/trl/sft_trainer.md", {})]
