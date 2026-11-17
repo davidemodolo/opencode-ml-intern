@@ -5,7 +5,6 @@ Phase 2 of [`docs/plan-phase-2.md`](docs/plan-phase-2.md): a single `ml-intern-m
 ## Before phase 2
 
 - [ ] Publish `ml-intern-mcp` on PyPI and `opencode-ml-intern` on npm, so `opencode plugin add opencode-ml-intern` works outside this repository
-- [ ] Check the CI workflow on GitHub
 - [ ] `submit_job`: accept the path of an existing `.py` file in `script` as well as the script source
 - [ ] Show the agent as "ML Intern" in the TUI if the agent API has a display name
 
