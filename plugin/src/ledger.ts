@@ -18,44 +18,45 @@ export interface JobRecord {
   readonly delivered?: boolean
 }
 
-const PREFIX = "job/"
+const JOBS = "job/"
+const SESSION_OF = "job-session/"
+const jobKey = (sessionID: string, jobId: string) => `${JOBS}${sessionID}/${jobId}`
 const FINAL_STATES = new Set(["succeeded", "failed", "timed_out", "cancelled"])
 
 export const isFinal = (record: JobRecord) => record.state !== undefined && FINAL_STATES.has(record.state)
 
-/** Jobs submitted from opencode sessions, persisted in plugin storage. */
+/** Jobs submitted from opencode sessions, persisted in plugin storage under their session. */
 export class JobLedger {
   constructor(private readonly store: KeyValueStore) {}
 
   async add(record: JobRecord): Promise<void> {
-    await this.store.set(PREFIX + record.jobId, record as any)
+    await this.store.set(SESSION_OF + record.jobId, record.sessionID)
+    await this.store.set(jobKey(record.sessionID, record.jobId), record as any)
   }
 
   async get(jobId: string): Promise<JobRecord | undefined> {
-    return (await this.store.get(PREFIX + jobId)) as JobRecord | undefined
+    const sessionID = (await this.store.get(SESSION_OF + jobId)) as string | undefined
+    if (sessionID === undefined) return undefined
+    return (await this.store.get(jobKey(sessionID, jobId))) as JobRecord | undefined
   }
 
   async update(jobId: string, patch: Partial<JobRecord>): Promise<JobRecord | undefined> {
     const current = await this.get(jobId)
     if (!current) return undefined
     const next = { ...current, ...patch }
-    await this.store.set(PREFIX + jobId, next as any)
+    await this.store.set(jobKey(current.sessionID, jobId), next as any)
     return next
   }
 
-  async all(): Promise<JobRecord[]> {
+  async forSession(sessionID: string): Promise<JobRecord[]> {
     const records: JobRecord[] = []
     let after: string | undefined
     do {
-      const page = await this.store.scan({ prefix: PREFIX, after, limit: 200 })
+      const page = await this.store.scan({ prefix: jobKey(sessionID, ""), after, limit: 200 })
       records.push(...page.entries.map((e) => e.value as JobRecord))
       after = page.next
     } while (after)
-    return records
-  }
-
-  async forSession(sessionID: string): Promise<JobRecord[]> {
-    return (await this.all()).filter((r) => r.sessionID === sessionID).sort((a, b) => a.submittedAt - b.submittedAt)
+    return records.sort((a, b) => a.submittedAt - b.submittedAt)
   }
 }
 
