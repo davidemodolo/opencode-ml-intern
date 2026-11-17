@@ -184,6 +184,25 @@ async def test_submit_job_reads_a_script_path(tmp_path):
             assert result.is_error
 
 
+async def test_log_and_list_windows_reject_empty_or_negative_sizes(tmp_path):
+    service = make_service(tmp_path)
+    async with Client(build_server([], service)) as client:
+        submitted = await client.call_tool(
+            "submit_job", {"name": "n", "script": "print(1); print(2)"}
+        )
+        job_id = submitted.structured_content["job_id"]
+        wait_for(service, job_id, FINISHED)
+        empty = await client.call_tool("job_logs", {"job_id": job_id, "tail": 0})
+        bad = [
+            await client.call_tool("job_logs", {"job_id": job_id, "offset": -1}),
+            await client.call_tool("job_logs", {"job_id": job_id, "tail": -1}),
+            await client.call_tool("job_logs", {"job_id": job_id, "offset": 0, "limit": 0}),
+            await client.call_tool("list_jobs", {"limit": 0}),
+        ]
+    assert empty.structured_content["lines"] == []
+    assert all(result.is_error for result in bad)
+
+
 async def test_compute_tools_over_mcp(tmp_path):
     service = make_service(tmp_path)
     async with Client(build_server([], service)) as client:
