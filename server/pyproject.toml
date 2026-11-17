@@ -7,7 +7,15 @@ license = "Apache-2.0"
 authors = [{ name = "Davide Modolo", email = "davide.modolo98@gmail.com" }]
 requires-python = ">=3.12"
 dependencies = [
+    "beautifulsoup4==4.15.0",
+    "httpx==0.28.1",
+    "huggingface-hub==2.4.0",
     "mcp==2.3.0",
+    "nbconvert==7.17.2",
+    "nbformat==5.11.1",
+    "requests==2.34.2",
+    "thefuzz==0.22.1",
+    "whoosh==2.7.4",
 ]
 
 [project.scripts]
@@ -31,3 +39,4 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
+extend-exclude = ["src/ml_intern_mcp/tools"]
