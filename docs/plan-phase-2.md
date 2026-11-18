@@ -19,7 +19,7 @@ Decision: a single server with pluggable backends, where SkyPilot covers cloud p
 
 ## M6. SkyPilot backend
 
-- `skypilot==0.14.3` as a library, with managed jobs (`sky jobs launch`) for recovery on preemption.
+- `skypilot==0.14.3` through its SDK in a separate uv environment (its `click` pin conflicts with `huggingface_hub`), with managed jobs (`sky jobs launch`) for recovery on preemption.
 - `submit_job` maps to a SkyPilot task: resources, image, setup with `uv`, dataset and output mounts.
 - Price and availability catalog from SkyPilot for `list_hardware`.
 - Credential check with `sky check` at startup, exposed in `list_hardware`.
@@ -33,8 +33,8 @@ Decision: a single server with pluggable backends, where SkyPilot covers cloud p
 
 ## M8. Dollar gate
 
-- Estimated cost: hourly price times job timeout, passed as resource in the `mlintern_compute` `assert`.
-- Per-session and global budget in `ctx.storage`; `evaluate` returns `allow` below the threshold, `ask` near the limit, `deny` above it.
+- Estimated cost: hourly price (from the `catalog.json` the server writes) times job timeout, checked in `execute.before` on `submit_job`.
+- Per-session and global budget in `ctx.storage`: `allow` below the threshold, `ask` near the limit through `permission.assert`, `deny` above it.
 - Reconciliation with actual spend when the job ends; remaining budget shown in the instructions.
 - Automatic mode equivalent to ml-intern's "yolo": `allow` up to the budget, then `deny`.
 

@@ -25,18 +25,52 @@ Tokens: `HF_TOKEN` or the cached `hf auth login` token; `GITHUB_TOKEN` or the `g
 
 | Tool | What it does |
 |---|---|
-| `list_hardware` | Backends with their GPUs (total and free VRAM) |
-| `submit_job` | Runs a Python script with inline PEP 723 dependencies as a background job; takes the script source or the absolute path of a `.py` file |
-| `job_status` | State, exit code, duration and last log lines |
+| `list_hardware` | Backends with their local GPUs (total and free VRAM) or remote hardware options (GPU, count, VRAM, USD per hour), cheapest first, and the backend status; `gpu` filters the options |
+| `submit_job` | Runs a Python script with inline PEP 723 dependencies as a background job on a backend; takes the script source or the absolute path of a `.py` file |
+| `job_status` | State, exit code, duration, cost and last log lines |
 | `job_logs` | The last lines of the log, or a window from an offset |
 | `cancel_job` | Stops a queued or running job |
 | `list_jobs` | Jobs, optionally filtered by state |
 
-The `local` backend runs each job with `uv run --script` in its own process group, detached from the server, with `CUDA_VISIBLE_DEVICES` set to the single GPU assigned to it. One job runs per GPU (one at a time on machines without a GPU) and the others wait in a queue. A job that declares more `vram_gb` than the largest GPU is rejected at submit time.
+Every backend takes the same `submit_job` call: a PEP 723 script run with `uv run --script`, a timeout and environment variables. `backend` picks where it runs and `hardware` picks a remote machine type from `list_hardware`.
 
-Each job lives in `$XDG_DATA_HOME/ml-intern-mcp/jobs/<id>/` (`job.json`, `script.py`, `stdout.log`, `exit_code`), so jobs keep running and are picked up again when the server restarts. When a job ends the server writes `events/<id>.json` with its state, exit code, duration and last log lines; the opencode plugin reads these events to notify the session and removes each one once delivered.
+### Backends
 
-Environment variables: `ML_INTERN_DATA_DIR` overrides the data folder, `ML_INTERN_JOB_RUNNER` overrides the job command (default `uv run --script`).
+| Backend | Where jobs run | Enabled by |
+|---|---|---|
+| `local` | This machine's GPUs | Always |
+| `hf_jobs` | [Hugging Face Jobs](https://huggingface.co/docs/huggingface_hub/guides/jobs), on the flavor given as `hardware` (`t4-small`, `a10g-large`, `a100x8`...) | `[backends.hf_jobs]` in the config file and an HF token |
+| `skypilot` | The cheapest matching machine across the providers set up in [SkyPilot](https://docs.skypilot.co), as a managed job that is relaunched after a preemption; `hardware` is an accelerator and count such as `A100:1` | `[backends.skypilot]` in the config file and `sky check` passing for at least one provider |
+
+`local` runs each job in its own process group, detached from the server. `gpus` sets how many GPUs a job gets together (`CUDA_VISIBLE_DEVICES` lists them, default 1); a job waits in the queue until that many GPUs are free (one job at a time on machines without a GPU). A job that asks for more GPUs than the machine has, or more `vram_gb` than its largest GPUs have together, is rejected at submit time.
+
+Remote jobs are handed to their provider at submit time and polled every `poll_seconds`; `job_status` and `job_logs` poll at once. When a remote job ends the server saves its log and its cost, the hourly price times the running time. The working directory of a remote job is on the provider's machine and is deleted at the end, so scripts push their outputs to the Hub. `hf_jobs` and `skypilot` pass the local HF token to the job as the `HF_TOKEN` secret.
+
+SkyPilot runs in its own environment, since its dependencies conflict with this server's: the server calls it through `uv run --with skypilot[<providers>]==0.14.3`, which installs it on first use, and SkyPilot starts its local API server. Managed jobs also start SkyPilot's jobs controller on one of the configured providers. The SkyPilot catalog reports device memory per GPU for some providers and per machine for others, so `vram_gb` is shown but not checked on `skypilot`.
+
+### Config file
+
+`$XDG_CONFIG_HOME/ml-intern-mcp/config.toml` (or the path in `ML_INTERN_CONFIG`) enables the remote backends; each section is optional:
+
+```toml
+[backends.hf_jobs]
+namespace = "my-org"        # bill jobs to an organization; default: the token's user
+poll_seconds = 30
+
+[backends.skypilot]
+infra = ["runpod", "vast"]  # providers to use (cloud or cloud/region); default: every enabled one
+use_spot = false            # spot instances, cheaper and preemptible
+max_restarts_on_errors = 0  # relaunches after a failure of the script itself
+poll_seconds = 60
+```
+
+Credentials stay with each tool: `hf auth login` or `HF_TOKEN` for `hf_jobs`, the provider credentials checked by `sky check` for `skypilot`. `list_hardware` shows the status of each backend.
+
+### Job files
+
+Each job lives in `$XDG_DATA_HOME/ml-intern-mcp/jobs/<id>/` (`job.json`, `script.py`, `stdout.log`, `exit_code`), so local jobs keep running and remote jobs keep being polled when the server restarts. When a job ends the server writes `events/<id>.json` with its state, exit code, duration, cost and last log lines; the opencode plugin reads these events to notify the session and removes each one once delivered. `list_hardware` also writes `catalog.json` with the local GPU count and the hourly price of every remote option, which the plugin reads to check budgets.
+
+Environment variables: `ML_INTERN_DATA_DIR` overrides the data folder, `ML_INTERN_CONFIG` the config file, `ML_INTERN_JOB_RUNNER` the local job command (default `uv run --script`).
 
 ## Running
 

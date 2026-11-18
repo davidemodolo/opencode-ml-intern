@@ -51,7 +51,9 @@ Set up opencode-ml-intern (https://github.com/davidemodolo/opencode-ml-intern) o
 
 ## Hardware
 
-Each job runs on a single GPU. On a machine with several GPUs, jobs run in parallel, one per GPU, and the rest wait in a queue; a job fits when its model and training state fit in the VRAM of one GPU. The per-session limits (`maxActiveJobs`, default 4, and `maxGpuHours`, default 24) are plugin options, see [`plugin/README.md`](plugin/README.md).
+Jobs run on your machine's GPUs by default. On a machine with several GPUs, jobs run in parallel and the rest wait in a queue; a job takes one GPU, or several with `gpus` (the `multi-gpu` skill covers DDP, FSDP and `device_map="auto"`). The per-session limits (`maxActiveJobs`, default 4, and `maxGpuHours`, default 24 per GPU) are plugin options, see [`plugin/README.md`](plugin/README.md).
+
+For jobs that need more than your GPUs, the server can also run the same scripts on [Hugging Face Jobs](https://huggingface.co/docs/huggingface_hub/guides/jobs) and, through [SkyPilot](https://docs.skypilot.co), on cloud GPU providers such as RunPod, Vast, Lambda, AWS or GCP. These backends are enabled in the server config file ([`server/README.md`](server/README.md#config-file)) and spend from a dollar budget per session (`maxUsd`, default 0).
 
 ## How it works
 
@@ -72,6 +74,7 @@ flowchart LR
     agent -->|submit_job| ctools
     rtools --> web[(HF Hub, papers,<br/>docs, GitHub)]
     ctools -->|uv run --script| gpu[(local GPU)]
+    ctools -.->|hardware| remote[(HF Jobs, SkyPilot)]
     gpu -->|events/*.json| plugin
     plugin -->|wakes the session| agent
 ```
