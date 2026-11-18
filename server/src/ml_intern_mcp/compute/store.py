@@ -3,7 +3,7 @@ import time
 import uuid
 from pathlib import Path
 
-from ml_intern_mcp.compute.models import Job, JobSpec, JobState
+from ml_intern_mcp.compute.models import Hardware, Job, JobSpec, JobState
 from ml_intern_mcp.files import write_atomic
 
 
@@ -61,16 +61,34 @@ class JobStore:
             return []
         return path.read_text(errors="replace").splitlines()
 
+    def write_log(self, job_id: str, text: str) -> None:
+        write_atomic(self.log_path(job_id), text)
+
     def write_event(self, job: Job, tail: int = 20) -> None:
         event = {
             "job_id": job.id,
             "name": job.spec.name,
             "backend": job.spec.backend,
+            "hardware": job.spec.hardware,
+            "gpus": job.gpus,
             "state": job.state.value,
             "exit_code": job.exit_code,
             "duration_seconds": job.duration_seconds,
+            "cost_usd": job.cost_usd,
             "error": job.error,
             "workdir": str(self.folder(job.id)),
             "log_tail": self.log_lines(job.id)[-tail:],
         }
         write_atomic(self.events_dir / f"{job.id}.json", json.dumps(event, indent=2))
+
+    def write_catalog(self, hardware: list[Hardware]) -> None:
+        """Saves GPU counts and hourly prices per backend for the plugin's budget checks."""
+        backends = {
+            entry.backend: {
+                "gpus": len(entry.gpus),
+                "status": entry.status,
+                "usd_per_hour": {offer.hardware: offer.usd_per_hour for offer in entry.offers},
+            }
+            for entry in hardware
+        }
+        write_atomic(self.root / "catalog.json", json.dumps({"backends": backends}, indent=2))

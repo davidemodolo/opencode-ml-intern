@@ -14,6 +14,10 @@ from ml_intern_mcp.compute.store import JobStore
 from ml_intern_mcp.server import build_server
 
 ONE_GPU = [Gpu(index=0, name="Test GPU", memory_total_gb=8.0, memory_free_gb=7.5)]
+TWO_GPUS = [
+    Gpu(index=0, name="GPU A", memory_total_gb=24.0, memory_free_gb=20.0),
+    Gpu(index=1, name="GPU B", memory_total_gb=24.0, memory_free_gb=22.0),
+]
 
 
 def make_service(root, gpus=ONE_GPU):
@@ -40,7 +44,7 @@ def test_job_succeeds_writes_log_and_event(tmp_path):
     service = make_service(tmp_path)
     job = service.submit(JobSpec(name="hello", script="print('hello from job')"))
     job = wait_for(service, job.id, FINISHED)
-    assert job.state == JobState.SUCCEEDED and job.exit_code == 0 and job.gpu == 0
+    assert job.state == JobState.SUCCEEDED and job.exit_code == 0 and job.gpus == [0]
     assert service.store.log_lines(job.id) == ["hello from job"]
     event = json.loads((tmp_path / "events" / f"{job.id}.json").read_text())
     assert event["state"] == "succeeded" and event["log_tail"] == ["hello from job"]
@@ -121,7 +125,7 @@ def test_timeout_exit_code_marks_the_job_timed_out(tmp_path):
     job = store.create(JobSpec(name="slow", script="print(1)"))
     job.state = JobState.RUNNING
     store.exit_code_path(job.id).write_text("124")
-    backend.refresh(job)
+    backend.status(job)
     assert job.state == JobState.TIMED_OUT and job.exit_code == 124
 
 
@@ -143,7 +147,7 @@ def test_sigkill_noticed_after_a_restart_uses_the_exit_time(tmp_path):
     exit_code = store.exit_code_path(job.id)
     exit_code.write_text("137")
     os.utime(exit_code, (job.started_at + 600, job.started_at + 600))
-    backend.refresh(job)
+    backend.status(job)
     assert job.state == JobState.FAILED and job.duration_seconds == 600
 
 
@@ -173,11 +177,54 @@ def test_jobs_survive_a_service_restart(tmp_path):
     assert restarted.store.log_lines(job.id) == ["done"]
 
 
+def test_a_multi_gpu_job_sees_all_its_gpus(tmp_path):
+    service = make_service(tmp_path, gpus=TWO_GPUS)
+    script = "import os; print(os.environ['CUDA_VISIBLE_DEVICES'])"
+    job = service.submit(JobSpec(name="ddp", script=script, gpus=2))
+    job = wait_for(service, job.id, FINISHED)
+    assert job.gpus == [0, 1] and service.store.log_lines(job.id) == ["0,1"]
+
+
+def test_a_multi_gpu_job_waits_until_enough_gpus_are_free(tmp_path):
+    service = make_service(tmp_path, gpus=TWO_GPUS)
+    single = service.submit(JobSpec(name="one", script="import time; time.sleep(1.5)"))
+    pair = service.submit(JobSpec(name="two", script="print('pair')", gpus=2))
+    assert service.get(single.id).gpus == [1]
+    assert service.get(pair.id).state == JobState.QUEUED
+    pair = wait_for(service, pair.id, FINISHED)
+    assert pair.state == JobState.SUCCEEDED and pair.gpus == [0, 1]
+
+
+@pytest.mark.parametrize(
+    ("spec", "message"),
+    [
+        ({"gpus": 3}, "asks for 3 GPUs but backend local has 2"),
+        ({"gpus": 2, "vram_gb": 50}, "the 2 largest GPUs have 48.0 GB"),
+        ({"gpu": 0, "gpus": 2}, "set either gpu"),
+        ({"hardware": "a10g"}, "hardware applies to remote backends"),
+        ({"gpus": 0}, "gpus must be at least 1"),
+    ],
+)
+def test_gpu_requests_are_checked_at_submit(tmp_path, spec, message):
+    service = make_service(tmp_path, gpus=TWO_GPUS)
+    with pytest.raises(ComputeError, match=message):
+        service.submit(JobSpec(name="bad", script="print(1)", **spec))
+
+
+def test_vram_is_counted_on_the_free_memory_of_the_chosen_gpus():
+    pick = ComputeService._pick_gpus
+    assert pick(TWO_GPUS, JobSpec(name="j", script="x", gpus=2, vram_gb=42), set()) == [0, 1]
+    assert pick(TWO_GPUS, JobSpec(name="j", script="x", gpus=2, vram_gb=43), set()) is None
+    assert pick(TWO_GPUS, JobSpec(name="j", script="x", gpus=2), {1}) is None
+    assert pick(TWO_GPUS, JobSpec(name="j", script="x", vram_gb=21), set()) == [1]
+    assert pick(TWO_GPUS, JobSpec(name="j", script="x", vram_gb=21), {1}) is None
+
+
 def test_cpu_only_machine_runs_one_job_at_a_time(tmp_path):
     service = make_service(tmp_path, gpus=[])
     first = service.submit(JobSpec(name="a", script="import time; time.sleep(1)"))
     second = service.submit(JobSpec(name="b", script="print('b')"))
-    assert service.get(first.id).gpu is None
+    assert service.get(first.id).gpus == []
     assert service.get(second.id).state == JobState.QUEUED
     wait_for(service, second.id, FINISHED)
 

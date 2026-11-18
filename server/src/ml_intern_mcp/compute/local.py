@@ -6,7 +6,8 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from ml_intern_mcp.compute.models import Gpu, Hardware, Job, JobState
+from ml_intern_mcp.compute.backend import ComputeError
+from ml_intern_mcp.compute.models import Gpu, Hardware, Job, JobSpec, JobState
 from ml_intern_mcp.compute.store import JobStore
 
 TIMEOUT_EXIT_CODE = 124
@@ -64,6 +65,8 @@ class LocalBackend:
     """Runs jobs as detached process groups on this machine."""
 
     name = "local"
+    queues_locally = True
+    poll_seconds = 0.0
 
     def __init__(
         self,
@@ -79,7 +82,36 @@ class LocalBackend:
     def hardware(self) -> Hardware:
         return Hardware(backend=self.name, gpus=self.gpu_probe())
 
-    def start(self, job: Job, gpu: int | None) -> None:
+    def validate(self, spec: JobSpec) -> None:
+        if spec.hardware is not None:
+            raise ComputeError("hardware applies to remote backends; the local backend takes gpus")
+        gpus = {gpu.index: gpu for gpu in self.gpu_probe()}
+        if spec.gpu is not None:
+            if spec.gpus != 1:
+                raise ComputeError("set either gpu, to pick one GPU, or gpus, to use several")
+            if spec.gpu not in gpus:
+                raise ComputeError(f"gpu {spec.gpu} does not exist on backend {self.name}")
+        if spec.gpus > max(len(gpus), 1):
+            raise ComputeError(
+                f"the job asks for {spec.gpus} GPUs but backend {self.name} has {len(gpus)}"
+            )
+        if spec.vram_gb is None:
+            return
+        candidates = [gpus[spec.gpu]] if spec.gpu is not None else list(gpus.values())
+        if not candidates:
+            raise ComputeError("vram_gb was given but this backend has no GPU")
+        totals = sorted((gpu.memory_total_gb for gpu in candidates), reverse=True)
+        largest = round(sum(totals[: spec.gpus]), 2)
+        if spec.vram_gb > largest:
+            where = (
+                "the largest GPU has" if spec.gpus == 1 else f"the {spec.gpus} largest GPUs have"
+            )
+            raise ComputeError(f"the job needs {spec.vram_gb} GB of VRAM but {where} {largest} GB")
+
+    def price(self, spec: JobSpec) -> float | None:
+        return None
+
+    def submit(self, job: Job, gpus: list[int]) -> None:
         folder = self.store.folder(job.id)
         timeout_seconds = job.spec.timeout_minutes * 60
         command = " ".join(shlex.quote(part) for part in [*self.runner, "script.py"])
@@ -88,8 +120,8 @@ class LocalBackend:
             f"{command} > stdout.log 2>&1; echo $? > exit_code.tmp && mv exit_code.tmp exit_code"
         )
         env = {**os.environ, **job.spec.env, "PYTHONUNBUFFERED": "1"}
-        if gpu is not None:
-            env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+        if gpus:
+            env["CUDA_VISIBLE_DEVICES"] = ",".join(str(gpu) for gpu in gpus)
         process = subprocess.Popen(
             ["sh", "-c", wrapper],
             cwd=folder,
@@ -101,11 +133,11 @@ class LocalBackend:
         )
         self._processes[job.id] = process
         job.pid = process.pid
-        job.gpu = gpu
+        job.gpus = list(gpus)
         job.state = JobState.RUNNING
         job.started_at = time.time()
 
-    def refresh(self, job: Job) -> None:
+    def status(self, job: Job) -> None:
         process = self._processes.get(job.id)
         if process is not None:
             process.poll()
@@ -118,6 +150,9 @@ class LocalBackend:
             job.error = "the job process ended without writing an exit code"
             job.finished_at = time.time()
             self._processes.pop(job.id, None)
+
+    def logs(self, job: Job) -> None:
+        return None
 
     def cancel(self, job: Job) -> None:
         if job.pid is not None and _alive(job.pid):

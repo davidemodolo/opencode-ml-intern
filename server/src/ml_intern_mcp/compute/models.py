@@ -26,9 +26,22 @@ class Gpu:
 
 
 @dataclass
+class Offer:
+    """A machine type a remote backend can run a job on, priced per hour."""
+
+    hardware: str
+    gpu: str | None
+    gpu_count: int
+    vram_gb: float | None
+    usd_per_hour: float
+
+
+@dataclass
 class Hardware:
     backend: str
-    gpus: list[Gpu]
+    gpus: list[Gpu] = field(default_factory=list)
+    offers: list[Offer] = field(default_factory=list)
+    status: str = "ready"
 
 
 @dataclass
@@ -36,7 +49,9 @@ class JobSpec:
     name: str
     script: str
     backend: str = "local"
+    hardware: str | None = None
     gpu: int | None = None
+    gpus: int = 1
     vram_gb: float | None = None
     timeout_minutes: int = 60
     env: dict[str, str] = field(default_factory=dict)
@@ -52,7 +67,10 @@ class Job:
     finished_at: float | None = None
     exit_code: int | None = None
     pid: int | None = None
-    gpu: int | None = None
+    gpus: list[int] = field(default_factory=list)
+    remote_id: str | None = None
+    usd_per_hour: float | None = None
+    cost_usd: float | None = None
     error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
