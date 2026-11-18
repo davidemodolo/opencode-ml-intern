@@ -13,6 +13,14 @@ describe("options", () => {
     expect(resolveOptions({}, {}, "/home/u").dataDir).toBe("/home/u/.local/share/ml-intern-mcp")
     expect(resolveOptions({ maxGpuHours: 2, autoApprove: true }, {}).maxGpuHours).toBe(2)
   })
+
+  it("has no paid budget by default and keeps the ask ratio within 0 and 1", () => {
+    const defaults = resolveOptions({}, {})
+    expect(defaults).toMatchObject({ maxUsd: 0, maxGpuHours: undefined, maxUsdTotal: undefined, budgetAskRatio: 0.8 })
+    const set = resolveOptions({ maxUsd: 30, maxUsdTotal: 100, budgetAskRatio: 0.5 }, {})
+    expect(set).toMatchObject({ maxUsd: 30, maxUsdTotal: 100, budgetAskRatio: 0.5 })
+    expect(resolveOptions({ budgetAskRatio: 2 }, {}).budgetAskRatio).toBe(0.8)
+  })
 })
 
 describe("agents", () => {
@@ -24,6 +32,7 @@ describe("agents", () => {
     )
     expect(agents[ML_INTERN_AGENT]).toMatchObject({ mode: "primary", name: "ML Intern", color: "#2EC4B6" })
     expect(agents[ML_INTERN_AGENT].permissions).toContainEqual({ action: "ml-intern_submit_job", resource: "*", effect: "ask" })
+    expect(agents[ML_INTERN_AGENT].permissions).toContainEqual({ action: "ml-intern_spend_near_budget", resource: "*", effect: "ask" })
     const research = agents[ML_RESEARCH_AGENT]
     expect(research.mode).toBe("subagent")
     expect(research.permissions[0]).toEqual({ action: "*", resource: "*", effect: "deny" })

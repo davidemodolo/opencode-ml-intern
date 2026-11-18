@@ -7,9 +7,11 @@ export interface JobEvent {
   readonly job_id: string
   readonly name: string
   readonly backend: string
+  readonly hardware?: string | null
   readonly state: string
   readonly exit_code: number | null
   readonly duration_seconds: number | null
+  readonly cost_usd?: number | null
   readonly error: string | null
   readonly workdir?: string
   readonly log_tail: readonly string[]
@@ -18,7 +20,9 @@ export interface JobEvent {
 export function formatEvent(event: JobEvent): string {
   const duration = event.duration_seconds == null ? "" : ` after ${Math.round(event.duration_seconds)} s`
   const exit = event.exit_code == null ? "" : `, exit code ${event.exit_code}`
-  const lines = [`[ml-intern] Job ${event.job_id} (${event.name}) on ${event.backend} ${event.state}${duration}${exit}.`]
+  const cost = event.cost_usd == null ? "" : `, cost $${event.cost_usd.toFixed(2)}`
+  const where = event.hardware ? `${event.backend} (${event.hardware})` : event.backend
+  const lines = [`[ml-intern] Job ${event.job_id} (${event.name}) on ${where} ${event.state}${duration}${exit}${cost}.`]
   if (event.error) lines.push(`Error: ${event.error}`)
   if (event.workdir) lines.push(`Job directory (outputs are relative to it): ${event.workdir}`)
   if (event.log_tail.length) lines.push("Last log lines:", "```", ...event.log_tail, "```")
@@ -97,6 +101,7 @@ export class EventWatcher {
       const updated = await this.ledger.update(jobId, {
         state: event.state,
         durationSeconds: event.duration_seconds,
+        costUsd: event.cost_usd ?? null,
         delivered: true,
       })
       await this.deliver(updated ?? record, event)

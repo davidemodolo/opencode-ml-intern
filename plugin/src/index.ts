@@ -1,11 +1,12 @@
 import { Plugin } from "@opencode/plugin"
-import { configureAgents, ML_INTERN_AGENT, ML_RESEARCH_AGENT } from "./agents.js"
+import { budgetAction, configureAgents, ML_INTERN_AGENT, ML_RESEARCH_AGENT } from "./agents.js"
+import { Catalog } from "./catalog.js"
 import { sessionContext } from "./context.js"
 import { EventWatcher, formatEvent } from "./events.js"
 import { hfUser } from "./hf.js"
 import { registerServer } from "./mcp.js"
-import { SubmitGate, timeoutOf } from "./gate.js"
-import { JobLedger } from "./ledger.js"
+import { estimateUsd, limitsFor, requestOf, SubmitGate } from "./gate.js"
+import { JobLedger, spentUsd } from "./ledger.js"
 import { LoopGuard } from "./loop-guard.js"
 import { PollGuard } from "./poll-guard.js"
 import { resolveOptions } from "./options.js"
@@ -28,7 +29,8 @@ export default Plugin.define({
     const submitTool = `${options.mcpServer}_submit_job`
     const statusTool = `${options.mcpServer}_job_status`
     const ledger = new JobLedger(ctx.storage)
-    const gate = new SubmitGate(ledger, options)
+    const catalog = () => Catalog.read(options.dataDir)
+    const gate = new SubmitGate(ledger, options, catalog)
     const guard = new LoopGuard(options.loopThreshold)
     const polls = new PollGuard(options.loopThreshold)
     const skills = await loadSkills()
@@ -79,8 +81,24 @@ export default Plugin.define({
         if (reason) throw new Error(reason)
       }
       if (event.tool === submitTool) {
-        const reason = await gate.reserve(event.id, event.sessionID, timeoutOf(event.input))
-        if (reason) throw new Error(reason)
+        const request = requestOf(event.input)
+        const decision = await gate.reserve(event.id, event.sessionID, request)
+        if (decision.effect === "deny") throw new Error(decision.reason)
+        if (decision.effect === "ask" && !options.autonomous) {
+          await ctx.permission
+            .assert({
+              sessionID: event.sessionID,
+              agent: event.agent,
+              action: budgetAction(options),
+              resources: [`${request.backend}:${request.hardware ?? ""}`],
+              metadata: { description: decision.reason },
+              source: { type: "tool", messageID: event.messageID, id: event.id },
+            })
+            .catch((error: unknown) => {
+              gate.release(event.id)
+              throw error
+            })
+        }
       }
     })
 
@@ -90,12 +108,17 @@ export default Plugin.define({
         const jobId = event.status === "completed" ? jobIdFrom(event.result) : undefined
         try {
           if (jobId) {
+            const request = requestOf(event.input)
             await ledger.add({
               jobId,
               sessionID: event.sessionID,
               name: (event.input as { name?: string } | undefined)?.name ?? jobId,
-              timeoutMinutes: timeoutOf(event.input),
+              timeoutMinutes: request.timeoutMinutes,
               submittedAt: Date.now(),
+              backend: request.backend,
+              hardware: request.hardware,
+              gpus: request.gpus,
+              estimatedUsd: estimateUsd(request, await catalog()),
             })
           }
         } finally {
@@ -110,8 +133,14 @@ export default Plugin.define({
     })
 
     const contextFor = async (sessionID: string) => {
-      const [jobs, plan] = await Promise.all([ledger.forSession(sessionID), readPlan(sessionID)])
-      return sessionContext({ hfUser: user, limits: options, jobs, plan })
+      const [jobs, plan, current, all] = await Promise.all([
+        ledger.forSession(sessionID),
+        readPlan(sessionID),
+        catalog(),
+        options.maxUsdTotal === undefined ? undefined : ledger.all(),
+      ])
+      const totalSpentUsd = all && spentUsd(all)
+      return sessionContext({ hfUser: user, limits: limitsFor(options, current), jobs, totalSpentUsd, plan })
     }
 
     await ctx.session.hook("context", async (event) => {
