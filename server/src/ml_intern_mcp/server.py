@@ -12,10 +12,13 @@ from mcp.server.mcpserver.tools.base import Tool
 
 from ml_intern_mcp import __version__
 from ml_intern_mcp.cache import ResultCache
+from ml_intern_mcp.compute.backend import Backend
+from ml_intern_mcp.compute.hf_jobs import HfJobsBackend
 from ml_intern_mcp.compute.local import LocalBackend
 from ml_intern_mcp.compute.service import ComputeService
 from ml_intern_mcp.compute.store import JobStore
 from ml_intern_mcp.compute.tools import register_compute_tools
+from ml_intern_mcp.config import ConfigError, ServerConfig, config_path, load_config
 from ml_intern_mcp.paths import cache_dir, data_dir
 from ml_intern_mcp.research import ensure_github_token, load_api_search_spec, research_tools
 
@@ -73,10 +76,17 @@ def build_server(tools: list[Tool], service: ComputeService | None = None) -> MC
     return server
 
 
-def build_compute_service() -> ComputeService:
-    store = JobStore(data_dir())
+def build_backends(store: JobStore, config: ServerConfig) -> dict[str, Backend]:
     runner = shlex.split(os.environ.get("ML_INTERN_JOB_RUNNER", DEFAULT_RUNNER))
-    return ComputeService(store, {"local": LocalBackend(store, runner)})
+    backends: dict[str, Backend] = {"local": LocalBackend(store, runner)}
+    if config.hf_jobs is not None:
+        backends["hf_jobs"] = HfJobsBackend(store, config.hf_jobs)
+    return backends
+
+
+def build_compute_service(config: ServerConfig) -> ComputeService:
+    store = JobStore(data_dir())
+    return ComputeService(store, build_backends(store, config))
 
 
 def main() -> None:
@@ -85,6 +95,10 @@ def main() -> None:
     parser.add_argument("--no-cache", action="store_true", help="disable the result cache")
     args = parser.parse_args()
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    try:
+        config = load_config(config_path())
+    except ConfigError as error:
+        parser.error(str(error))
 
     root = cache_dir() / "results"
     if args.fresh:
@@ -93,6 +107,6 @@ def main() -> None:
 
     ensure_github_token()
     api_search_spec = asyncio.run(load_api_search_spec())
-    service = build_compute_service()
+    service = build_compute_service(config)
     service.reconcile()
     build_server(research_tools(cache, api_search_spec), service).run()
