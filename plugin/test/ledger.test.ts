@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { gateReason, gpuHours, JobLedger, type JobRecord } from "../src/ledger.js"
+import { gpuHours, JobLedger, spentUsd, type JobRecord } from "../src/ledger.js"
 import { MemoryStore } from "./memory-store.js"
 
 const job = (patch: Partial<JobRecord>): JobRecord => ({
@@ -18,6 +18,7 @@ describe("JobLedger", () => {
     await ledger.update("j1", { state: "succeeded" })
     expect((await ledger.get("j1"))?.state).toBe("succeeded")
     expect(await ledger.forSession("a")).toHaveLength(125)
+    expect(await ledger.all()).toHaveLength(250)
   })
 
   it("reads only the records of the requested session", async () => {
@@ -36,19 +37,15 @@ describe("JobLedger", () => {
   })
 })
 
-describe("gateReason", () => {
-  const limits = { maxActiveJobs: 2, maxGpuHours: 3 }
-
-  it("counts finished jobs by duration and active jobs by timeout", () => {
+describe("gpuHours", () => {
+  it("counts local jobs, finished by duration and active by timeout, times their GPUs", () => {
     expect(gpuHours([job({ state: "succeeded", durationSeconds: 1800 }), job({ timeoutMinutes: 90 })])).toBe(2)
+    expect(gpuHours([job({ gpus: 4, timeoutMinutes: 30 }), job({ backend: "hf_jobs", timeoutMinutes: 600 })])).toBe(2)
   })
+})
 
-  it("refuses when too many jobs are active", () => {
-    expect(gateReason([job({}), job({})], 10, limits)).toMatch(/2 active jobs/)
-  })
-
-  it("refuses when the timeout would exceed the GPU-hour budget", () => {
-    expect(gateReason([job({ state: "failed", durationSeconds: 7200 })], 90, limits)).toMatch(/budget/)
-    expect(gateReason([job({ state: "failed", durationSeconds: 7200 })], 30, limits)).toBeUndefined()
+describe("spentUsd", () => {
+  it("counts paid jobs only", () => {
+    expect(spentUsd([job({ estimatedUsd: 3 }), job({ backend: "skypilot", estimatedUsd: 1.5 })])).toBe(1.5)
   })
 })

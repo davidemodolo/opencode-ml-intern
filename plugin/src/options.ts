@@ -5,7 +5,10 @@ export interface Options {
   readonly mcpServer: string
   readonly dataDir: string
   readonly maxActiveJobs: number
-  readonly maxGpuHours: number
+  readonly maxGpuHours?: number
+  readonly maxUsd: number
+  readonly maxUsdTotal?: number
+  readonly budgetAskRatio: number
   readonly autoApprove: boolean
   readonly autonomous: boolean
   readonly loopThreshold: number
@@ -23,8 +26,10 @@ export function defaultDataDir(env: Env, home = homedir()): string {
   return join(env.XDG_DATA_HOME || join(home, ".local", "share"), "ml-intern-mcp")
 }
 
+const positive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0
+
 function number(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback
+  return positive(value) ? value : fallback
 }
 
 export function resolveOptions(raw: Readonly<Record<string, unknown>>, env: Env, home = homedir()): Options {
@@ -32,7 +37,10 @@ export function resolveOptions(raw: Readonly<Record<string, unknown>>, env: Env,
     mcpServer: typeof raw.mcpServer === "string" ? raw.mcpServer : "ml-intern",
     dataDir: typeof raw.dataDir === "string" ? raw.dataDir : defaultDataDir(env, home),
     maxActiveJobs: number(raw.maxActiveJobs, 4),
-    maxGpuHours: number(raw.maxGpuHours, 24),
+    maxGpuHours: positive(raw.maxGpuHours) ? raw.maxGpuHours : undefined,
+    maxUsd: number(raw.maxUsd, 0),
+    maxUsdTotal: positive(raw.maxUsdTotal) ? raw.maxUsdTotal : undefined,
+    budgetAskRatio: positive(raw.budgetAskRatio) && raw.budgetAskRatio <= 1 ? raw.budgetAskRatio : 0.8,
     autoApprove: raw.autoApprove === true,
     autonomous: raw.autonomous === true,
     loopThreshold: number(raw.loopThreshold, 3),

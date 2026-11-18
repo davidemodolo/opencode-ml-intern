@@ -47,6 +47,19 @@ describe("EventWatcher", () => {
     expect(delivered).toEqual(["j1"])
   })
 
+  it("records the cost of a paid job and shows it with the hardware", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mli-"))
+    await mkdir(join(dir, "events"))
+    const paid = { ...event, backend: "hf_jobs", hardware: "a10g-small", exit_code: null, cost_usd: 0.4166 }
+    await writeFile(join(dir, "events", "j1.json"), JSON.stringify(paid))
+    const ledger = new JobLedger(new MemoryStore())
+    await ledger.add({ jobId: "j1", sessionID: "s1", name: "sft", timeoutMinutes: 60, submittedAt: 0, backend: "hf_jobs", estimatedUsd: 1 })
+    const watcher = new EventWatcher(dir, ledger, async () => {}, 60_000)
+    await watcher.scan()
+    expect(await ledger.get("j1")).toMatchObject({ costUsd: 0.4166, estimatedUsd: 1 })
+    expect(formatEvent(paid).split("\n")[0]).toBe("[ml-intern] Job j1 (sft) on hf_jobs (a10g-small) succeeded after 42 s, cost $0.42.")
+  })
+
   it("formats the notification with state, exit code and log tail", () => {
     expect(formatEvent(event)).toBe(
       "[ml-intern] Job j1 (sft) on local succeeded after 42 s, exit code 0.\nLast log lines:\n```\nloss 0.5\n```\nRead more with job_logs. Continue the task from here.",
