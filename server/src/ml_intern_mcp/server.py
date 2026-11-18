@@ -24,6 +24,8 @@ CACHE_TTL_SECONDS = 6 * 3600
 RECONCILE_SECONDS = 2.0
 DEFAULT_RUNNER = "uv run --script"
 
+logger = logging.getLogger(__name__)
+
 
 def _lifespan(service: ComputeService | None):
     @asynccontextmanager
@@ -32,16 +34,23 @@ def _lifespan(service: ComputeService | None):
             yield None
             return
 
+        async def write_catalog() -> None:
+            try:
+                await asyncio.to_thread(service.hardware)
+            except Exception:
+                logger.warning("could not read the hardware catalog", exc_info=True)
+
         async def reconcile_forever() -> None:
             while True:
                 await asyncio.to_thread(service.reconcile)
                 await asyncio.sleep(RECONCILE_SECONDS)
 
-        task = asyncio.create_task(reconcile_forever())
+        tasks = [asyncio.create_task(write_catalog()), asyncio.create_task(reconcile_forever())]
         try:
             yield None
         finally:
-            task.cancel()
+            for task in tasks:
+                task.cancel()
 
     return lifespan
 
