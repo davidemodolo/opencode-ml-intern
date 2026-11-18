@@ -1,6 +1,6 @@
 import os
 import tomllib
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -16,11 +16,20 @@ class HfJobsConfig:
 
 
 @dataclass
+class SkyPilotConfig:
+    infra: list[str] = field(default_factory=list)
+    use_spot: bool = False
+    max_restarts_on_errors: int = 0
+    poll_seconds: float = 60.0
+
+
+@dataclass
 class ServerConfig:
     hf_jobs: HfJobsConfig | None = None
+    skypilot: SkyPilotConfig | None = None
 
 
-BACKEND_SECTIONS = {"hf_jobs": HfJobsConfig}
+BACKEND_SECTIONS = {"hf_jobs": HfJobsConfig, "skypilot": SkyPilotConfig}
 
 
 def config_path() -> Path:
