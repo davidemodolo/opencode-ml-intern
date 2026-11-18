@@ -7,6 +7,7 @@ import shutil
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from huggingface_hub import get_token
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.tools.base import Tool
 
@@ -16,6 +17,7 @@ from ml_intern_mcp.compute.backend import Backend
 from ml_intern_mcp.compute.hf_jobs import HfJobsBackend
 from ml_intern_mcp.compute.local import LocalBackend
 from ml_intern_mcp.compute.service import ComputeService
+from ml_intern_mcp.compute.skypilot import SkyPilotBackend
 from ml_intern_mcp.compute.store import JobStore
 from ml_intern_mcp.compute.tools import register_compute_tools
 from ml_intern_mcp.config import ConfigError, ServerConfig, config_path, load_config
@@ -81,6 +83,8 @@ def build_backends(store: JobStore, config: ServerConfig) -> dict[str, Backend]:
     backends: dict[str, Backend] = {"local": LocalBackend(store, runner)}
     if config.hf_jobs is not None:
         backends["hf_jobs"] = HfJobsBackend(store, config.hf_jobs)
+    if config.skypilot is not None:
+        backends["skypilot"] = SkyPilotBackend(store, config.skypilot, hf_token=get_token)
     return backends
 
 
