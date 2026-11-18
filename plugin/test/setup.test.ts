@@ -64,7 +64,7 @@ describe("mcp server registration", () => {
 describe("skills", () => {
   it("loads every bundled skill with a description", async () => {
     const skills = await loadSkills()
-    expect(skills.map((s) => s.id).sort()).toEqual(["lora-sft", "ml-job-script", "preference-tuning", "qlora"])
+    expect(skills.map((s) => s.id).sort()).toEqual(["lora-sft", "ml-job-script", "multi-gpu", "preference-tuning", "qlora"])
     for (const skill of skills) expect(skill.description.length).toBeGreaterThan(20)
   })
 })
